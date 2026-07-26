@@ -1,0 +1,165 @@
+id: com.lumide.plugin.status-bar-stats
+name: 'Lumide Status Bar System Monitor'
+publisher: 'lumide'
+version: '1.0.0'
+description: 'Cross-platform real-time system metrics (CPU, RAM, Disk, Network, Battery, Thermal) in the Lumide IDE status bar.'
+entry_point: 'bin/main.dart'
+
+activation_events:
+  - 'onStartup'
+
+permissions:
+  - fileSystem:
+      - '/proc/stat'
+      - '/proc/loadavg'
+      - '/proc/meminfo'
+      - '/proc/net/dev'
+      - '/sys/class/power_supply/**'
+      - '/sys/class/thermal/**'
+  - shell:
+      - sysctl
+      - vm_stat
+      - df
+      - netstat
+      - pmset
+      - wmic
+      - top
+      - route
+
+configuration:
+  - key: lumideStats.enableCpu
+    type: boolean
+    default: true
+    title: 'Enable CPU Metric'
+    description: 'Display CPU usage percentage in the status bar.'
+  - key: lumideStats.enableRam
+    type: boolean
+    default: true
+    title: 'Enable RAM Metric'
+    description: 'Display RAM memory utilization in the status bar.'
+  - key: lumideStats.enableDisk
+    type: boolean
+    default: true
+    title: 'Enable Disk Metric'
+    description: 'Display free disk space in the status bar.'
+  - key: lumideStats.enableNetwork
+    type: boolean
+    default: true
+    title: 'Enable Network Metric'
+    description: 'Display network download and upload rates in the status bar.'
+  - key: lumideStats.enableBattery
+    type: boolean
+    default: true
+    title: 'Enable Battery Metric'
+    description: 'Display battery percentage and charging status in the status bar.'
+  - key: lumideStats.enableThermal
+    type: boolean
+    default: true
+    title: 'Enable Thermal Sensor Metric'
+    description: 'Display CPU average temperature in the status bar.'
+  - key: lumideStats.enableUptime
+    type: boolean
+    default: true
+    title: 'Enable Session Uptime Metric'
+    description: 'Display Lumide IDE session uptime in the status bar.'
+
+  - key: lumideStats.compactCpu
+    type: boolean
+    default: true
+    title: 'Compact CPU Mode'
+    description: 'Display CPU metric as a compact icon without text label.'
+  - key: lumideStats.compactRam
+    type: boolean
+    default: true
+    title: 'Compact RAM Mode'
+    description: 'Display RAM metric as a compact icon without text label.'
+  - key: lumideStats.compactDisk
+    type: boolean
+    default: true
+    title: 'Compact Disk Mode'
+    description: 'Display Disk metric as a compact icon without text label.'
+  - key: lumideStats.compactNetwork
+    type: boolean
+    default: true
+    title: 'Compact Network Mode'
+    description: 'Display Network metric as a compact icon without text label.'
+  - key: lumideStats.compactBattery
+    type: boolean
+    default: true
+    title: 'Compact Battery Mode'
+    description: 'Display Battery metric as a compact icon without text label.'
+  - key: lumideStats.compactThermal
+    type: boolean
+    default: true
+    title: 'Compact Thermal Mode'
+    description: 'Display Thermal metric as a compact icon without text label.'
+  - key: lumideStats.compactUptime
+    type: boolean
+    default: true
+    title: 'Compact Uptime Mode'
+    description: 'Display Uptime metric as a compact icon without text label.'
+
+  - key: lumideStats.useFahrenheit
+    type: boolean
+    default: false
+    title: 'Use Fahrenheit Temperature'
+    description: 'Display temperature in Fahrenheit (°F) instead of Celsius (°C).'
+
+  - key: lumideStats.updateIntervalSeconds
+    type: integer
+    default: 2
+    title: 'Polling Refresh Rate (Seconds)'
+    description: 'Polling interval in seconds for system metrics collection.'
+  - key: lumideStats.priorityBase
+    type: integer
+    default: 1000
+    title: 'Status Bar Priority Base'
+    description: 'Base priority used to group status bar items tightly together (default: 1000).'
+  - key: lumideStats.batterySaverMode
+    type: boolean
+    default: true
+    title: 'Battery Saver Mode'
+    description: 'Automatically slow down refresh rate when on battery power.'
+  - key: lumideStats.showTopBarIcon
+    type: boolean
+    default: true
+    title: 'Show Top Bar Main Icon'
+    description: 'Display System Stats Quick Menu icon in the top toolbar.'
+
+contributes:
+  commands:
+    - id: lumide-stats.showQuickMenu
+      title: 'Lumide Stats: Open Quick Menu'
+      category: 'System Stats'
+    - id: lumide-stats.showDashboard
+      title: 'Lumide Stats: Show Detailed Dashboard'
+      category: 'System Stats'
+    - id: lumide-stats.toggleCpu
+      title: 'Lumide Stats: Toggle CPU Metric'
+      category: 'System Stats'
+    - id: lumide-stats.toggleRam
+      title: 'Lumide Stats: Toggle RAM Metric'
+      category: 'System Stats'
+    - id: lumide-stats.toggleDisk
+      title: 'Lumide Stats: Toggle Disk Metric'
+      category: 'System Stats'
+    - id: lumide-stats.toggleNetwork
+      title: 'Lumide Stats: Toggle Network Metric'
+      category: 'System Stats'
+    - id: lumide-stats.toggleBattery
+      title: 'Lumide Stats: Toggle Battery Metric'
+      category: 'System Stats'
+    - id: lumide-stats.toggleSensors
+      title: 'Lumide Stats: Toggle Thermal Sensor Metric'
+      category: 'System Stats'
+    - id: lumide-stats.toggleTopBarIcon
+      title: 'Lumide Stats: Toggle Top Bar Main Icon'
+      category: 'System Stats'
+
+  keybindings:
+    - command: 'lumide-stats.showQuickMenu'
+      key: 'ctrl+alt+s'
+      mac: 'cmd+alt+s'
+    - command: 'lumide-stats.showDashboard'
+      key: 'ctrl+alt+d'
+      mac: 'cmd+alt+d'
