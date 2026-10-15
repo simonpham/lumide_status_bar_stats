@@ -47,24 +47,26 @@ final class _SystemPowerStatus extends Struct {
   external int batteryFullLifeTime;
 }
 
-typedef _GetSystemTimesC = Int32 Function(
-    Pointer<Uint64>, Pointer<Uint64>, Pointer<Uint64>);
-typedef _GetSystemTimes = int Function(
-    Pointer<Uint64>, Pointer<Uint64>, Pointer<Uint64>);
+typedef _GetSystemTimesC =
+    Int32 Function(Pointer<Uint64>, Pointer<Uint64>, Pointer<Uint64>);
+typedef _GetSystemTimes =
+    int Function(Pointer<Uint64>, Pointer<Uint64>, Pointer<Uint64>);
 typedef _GlobalMemoryStatusExC = Int32 Function(Pointer<_MemoryStatusEx>);
 typedef _GlobalMemoryStatusEx = int Function(Pointer<_MemoryStatusEx>);
-typedef _GetDiskFreeSpaceExC = Int32 Function(
-  Pointer<Utf16>,
-  Pointer<Uint64>,
-  Pointer<Uint64>,
-  Pointer<Uint64>,
-);
-typedef _GetDiskFreeSpaceEx = int Function(
-  Pointer<Utf16>,
-  Pointer<Uint64>,
-  Pointer<Uint64>,
-  Pointer<Uint64>,
-);
+typedef _GetDiskFreeSpaceExC =
+    Int32 Function(
+      Pointer<Utf16>,
+      Pointer<Uint64>,
+      Pointer<Uint64>,
+      Pointer<Uint64>,
+    );
+typedef _GetDiskFreeSpaceEx =
+    int Function(
+      Pointer<Utf16>,
+      Pointer<Uint64>,
+      Pointer<Uint64>,
+      Pointer<Uint64>,
+    );
 typedef _GetSystemPowerStatusC = Int32 Function(Pointer<_SystemPowerStatus>);
 typedef _GetSystemPowerStatus = int Function(Pointer<_SystemPowerStatus>);
 
@@ -77,16 +79,16 @@ class WindowsSystem {
           .lookupFunction<_GetSystemTimesC, _GetSystemTimes>('GetSystemTimes');
       _globalMemoryStatusEx = kernel32
           .lookupFunction<_GlobalMemoryStatusExC, _GlobalMemoryStatusEx>(
-        'GlobalMemoryStatusEx',
-      );
-      _getDiskFreeSpaceEx =
-          kernel32.lookupFunction<_GetDiskFreeSpaceExC, _GetDiskFreeSpaceEx>(
-        'GetDiskFreeSpaceExW',
-      );
+            'GlobalMemoryStatusEx',
+          );
+      _getDiskFreeSpaceEx = kernel32
+          .lookupFunction<_GetDiskFreeSpaceExC, _GetDiskFreeSpaceEx>(
+            'GetDiskFreeSpaceExW',
+          );
       _getSystemPowerStatus = kernel32
           .lookupFunction<_GetSystemPowerStatusC, _GetSystemPowerStatus>(
-        'GetSystemPowerStatus',
-      );
+            'GetSystemPowerStatus',
+          );
     } catch (_) {}
   }
 
@@ -182,16 +184,16 @@ class WindowsSystem {
       final state = charging
           ? BatteryState.charging
           : onAc
-              ? (percent >= 100 ? BatteryState.full : BatteryState.notCharging)
-              : BatteryState.discharging;
+          ? (percent >= 100 ? BatteryState.full : BatteryState.notCharging)
+          : BatteryState.discharging;
       final seconds = status.ref.batteryLifeTime;
       return BatteryStats(
         levelPercent: percent,
         state: state,
         timeRemainingMinutes:
             state == BatteryState.discharging && seconds != 0xFFFFFFFF
-                ? seconds ~/ 60
-                : null,
+            ? seconds ~/ 60
+            : null,
       );
     } finally {
       calloc.free(status);

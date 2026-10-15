@@ -17,43 +17,43 @@ String buildTextReport(
     cpu == null
         ? 'CPU: $unavailable'
         : 'CPU: ${cpu.usagePercent.toStringAsFixed(1)}% of ${cpu.coreCount} cores'
-            '${cpu.loadAverage == null ? '' : ' · load ${cpu.loadAverage}'}',
+              '${cpu.loadAverage == null ? '' : ' · load ${cpu.loadAverage}'}',
   );
   final ram = snapshot.ram;
   lines.add(
     ram == null
         ? 'Memory: $unavailable'
         : 'Memory: ${formatBytes(ram.usedBytes)} of ${formatBytes(ram.totalBytes)} '
-            '(${formatPercent(ram.usagePercent)})'
-            '${ram.swapUsedBytes == null ? '' : ' · swap ${formatBytes(ram.swapUsedBytes!)}'}',
+              '(${formatPercent(ram.usagePercent)})'
+              '${ram.swapUsedBytes == null ? '' : ' · swap ${formatBytes(ram.swapUsedBytes!)}'}',
   );
   final disk = snapshot.disk;
   lines.add(
     disk == null
         ? 'Disk: $unavailable'
         : 'Disk (${disk.volume}): ${formatBytes(disk.freeBytes)} free of '
-            '${formatBytes(disk.totalBytes)} (${formatPercent(disk.usagePercent)} used)',
+              '${formatBytes(disk.totalBytes)} (${formatPercent(disk.usagePercent)} used)',
   );
   final network = snapshot.network;
   lines.add(
     network == null
         ? 'Network: $unavailable'
         : 'Network${network.interface == null ? '' : ' (${network.interface})'}: '
-            '↓${network.formattedDownload} ↑${network.formattedUpload}',
+              '↓${network.formattedDownload} ↑${network.formattedUpload}',
   );
   final battery = snapshot.battery;
   lines.add(
     battery == null
         ? 'Battery: none'
         : 'Battery: ${battery.levelPercent}% · ${battery.stateLabel}'
-            '${battery.timeRemainingMinutes == null ? '' : ' · ${formatMinutes(battery.timeRemainingMinutes!)}'}',
+              '${battery.timeRemainingMinutes == null ? '' : ' · ${formatMinutes(battery.timeRemainingMinutes!)}'}',
   );
   final thermal = snapshot.thermal;
   lines.add(
     thermal == null
         ? 'CPU temperature: $unavailable'
         : 'CPU temperature: ${formatTemperature(thermal.temperatureCelsius, fahrenheit: fahrenheit)} '
-            '(${thermal.source})${thermal.fanRpm == null ? '' : ' · fan ${thermal.fanRpm} RPM'}',
+              '(${thermal.source})${thermal.fanRpm == null ? '' : ' · fan ${thermal.fanRpm} RPM'}',
   );
   lines.add(
     'Lumide session: ${formatDuration(snapshot.session.uptime)} · '

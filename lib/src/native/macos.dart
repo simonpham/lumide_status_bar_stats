@@ -13,10 +13,10 @@ import '../parsers.dart';
 
 typedef _MachHostSelfC = Uint32 Function();
 typedef _MachHostSelf = int Function();
-typedef _HostStatisticsC = Int32 Function(
-    Uint32, Int32, Pointer<Int32>, Pointer<Uint32>);
-typedef _HostStatistics = int Function(
-    int, int, Pointer<Int32>, Pointer<Uint32>);
+typedef _HostStatisticsC =
+    Int32 Function(Uint32, Int32, Pointer<Int32>, Pointer<Uint32>);
+typedef _HostStatistics =
+    int Function(int, int, Pointer<Int32>, Pointer<Uint32>);
 typedef _GetLoadAvgC = Int32 Function(Pointer<Double>, Int32);
 typedef _GetLoadAvg = int Function(Pointer<Double>, int);
 
@@ -100,21 +100,22 @@ typedef _IOServiceMatchingC = Pointer<Void> Function(Pointer<Utf8>);
 typedef _IOServiceMatching = Pointer<Void> Function(Pointer<Utf8>);
 typedef _IOServiceGetMatchingServiceC = Uint32 Function(Uint32, Pointer<Void>);
 typedef _IOServiceGetMatchingService = int Function(int, Pointer<Void>);
-typedef _IOServiceOpenC = Int32 Function(
-    Uint32, Uint32, Uint32, Pointer<Uint32>);
+typedef _IOServiceOpenC =
+    Int32 Function(Uint32, Uint32, Uint32, Pointer<Uint32>);
 typedef _IOServiceOpen = int Function(int, int, int, Pointer<Uint32>);
 typedef _IOObjectReleaseC = Int32 Function(Uint32);
 typedef _IOObjectRelease = int Function(int);
-typedef _IOConnectCallStructMethodC = Int32 Function(
-  Uint32,
-  Uint32,
-  Pointer<Void>,
-  Size,
-  Pointer<Void>,
-  Pointer<Size>,
-);
-typedef _IOConnectCallStructMethod = int Function(
-    int, int, Pointer<Void>, int, Pointer<Void>, Pointer<Size>);
+typedef _IOConnectCallStructMethodC =
+    Int32 Function(
+      Uint32,
+      Uint32,
+      Pointer<Void>,
+      Size,
+      Pointer<Void>,
+      Pointer<Size>,
+    );
+typedef _IOConnectCallStructMethod =
+    int Function(int, int, Pointer<Void>, int, Pointer<Void>, Pointer<Size>);
 
 /// `SMCKeyData_t` from the AppleSMC user client (80 bytes).
 final class _SmcKeyData extends Struct {
@@ -201,22 +202,29 @@ class AppleSmc {
       final ioKit = DynamicLibrary.open(
         '/System/Library/Frameworks/IOKit.framework/IOKit',
       );
-      final matching =
-          ioKit.lookupFunction<_IOServiceMatchingC, _IOServiceMatching>(
-        'IOServiceMatching',
-      );
-      final getService = ioKit.lookupFunction<_IOServiceGetMatchingServiceC,
-          _IOServiceGetMatchingService>('IOServiceGetMatchingService');
+      final matching = ioKit
+          .lookupFunction<_IOServiceMatchingC, _IOServiceMatching>(
+            'IOServiceMatching',
+          );
+      final getService = ioKit
+          .lookupFunction<
+            _IOServiceGetMatchingServiceC,
+            _IOServiceGetMatchingService
+          >('IOServiceGetMatchingService');
       final open = ioKit.lookupFunction<_IOServiceOpenC, _IOServiceOpen>(
         'IOServiceOpen',
       );
       final release = ioKit.lookupFunction<_IOObjectReleaseC, _IOObjectRelease>(
         'IOObjectRelease',
       );
-      _call = ioKit.lookupFunction<_IOConnectCallStructMethodC,
-          _IOConnectCallStructMethod>('IOConnectCallStructMethod');
-      final taskSelf =
-          DynamicLibrary.process().lookup<Uint32>('mach_task_self_').value;
+      _call = ioKit
+          .lookupFunction<
+            _IOConnectCallStructMethodC,
+            _IOConnectCallStructMethod
+          >('IOConnectCallStructMethod');
+      final taskSelf = DynamicLibrary.process()
+          .lookup<Uint32>('mach_task_self_')
+          .value;
 
       final name = 'AppleSMC'.toNativeUtf8();
       // IOServiceGetMatchingService consumes the matching dictionary.
@@ -257,11 +265,11 @@ class AppleSmc {
       key.codeUnits.fold(0, (code, unit) => (code << 8) | (unit & 0xFF));
 
   static String _fourCharString(int code) => String.fromCharCodes([
-        (code >> 24) & 0xFF,
-        (code >> 16) & 0xFF,
-        (code >> 8) & 0xFF,
-        code & 0xFF,
-      ]);
+    (code >> 24) & 0xFF,
+    (code >> 16) & 0xFF,
+    (code >> 8) & 0xFF,
+    code & 0xFF,
+  ]);
 
   bool _send(Pointer<_SmcKeyData> input, Pointer<_SmcKeyData> output) {
     final size = calloc<Size>()..value = sizeOf<_SmcKeyData>();

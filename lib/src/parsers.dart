@@ -31,8 +31,12 @@ class CpuTimes {
 CpuTimes? parseProcStat(String content) {
   for (final line in content.split('\n')) {
     if (!line.startsWith('cpu ')) continue;
-    final values =
-        line.trim().split(_whitespace).skip(1).map(int.tryParse).toList();
+    final values = line
+        .trim()
+        .split(_whitespace)
+        .skip(1)
+        .map(int.tryParse)
+        .toList();
     if (values.length < 4 || values.take(4).any((v) => v == null)) {
       return null;
     }
@@ -74,7 +78,8 @@ RamStats? parseMeminfo(String content) {
   }
   final total = kb['MemTotal'];
   if (total == null || total <= 0) return null;
-  final available = kb['MemAvailable'] ??
+  final available =
+      kb['MemAvailable'] ??
       (kb['MemFree'] ?? 0) + (kb['Buffers'] ?? 0) + (kb['Cached'] ?? 0);
   final swapTotal = kb['SwapTotal'];
   final swapFree = kb['SwapFree'];
@@ -92,7 +97,8 @@ RamStats? parseMeminfo(String content) {
 /// Used memory = app memory (anonymous - purgeable) + wired + compressed,
 /// the same formula as Activity Monitor's "Memory Used".
 int? parseVmStatUsedBytes(String output) {
-  final pageSize = int.tryParse(
+  final pageSize =
+      int.tryParse(
         RegExp(r'page size of (\d+) bytes').firstMatch(output)?.group(1) ?? '',
       ) ??
       4096;

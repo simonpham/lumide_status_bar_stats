@@ -16,20 +16,19 @@ SystemStatsSnapshot _snapshot({
   NetworkStats? network,
   BatteryStats? battery,
   ThermalStats? thermal,
-}) =>
-    SystemStatsSnapshot(
-      timestamp: DateTime(2026),
-      cpu: cpu,
-      ram: ram,
-      disk: disk,
-      network: network,
-      battery: battery,
-      thermal: thermal,
-      session: const SessionStats(
-        uptime: Duration(hours: 1, minutes: 5),
-        pluginRssBytes: 50 << 20,
-      ),
-    );
+}) => SystemStatsSnapshot(
+  timestamp: DateTime(2026),
+  cpu: cpu,
+  ram: ram,
+  disk: disk,
+  network: network,
+  battery: battery,
+  thermal: thermal,
+  session: const SessionStats(
+    uptime: Duration(hours: 1, minutes: 5),
+    pluginRssBytes: 50 << 20,
+  ),
+);
 
 void main() {
   group('plugin.yaml', () {
@@ -232,7 +231,9 @@ Filesystem     1024-blocks      Used Available Capacity  Mounted on
 
     test('battery status and time estimate', () {
       expect(
-          parseSysfsBatteryStatus('Discharging\n'), BatteryState.discharging);
+        parseSysfsBatteryStatus('Discharging\n'),
+        BatteryState.discharging,
+      );
       expect(parseSysfsBatteryStatus('Not charging'), BatteryState.notCharging);
       expect(parseSysfsBatteryStatus('Full'), BatteryState.full);
       expect(parseSysfsBatteryStatus('weird'), BatteryState.unknown);
@@ -259,7 +260,10 @@ Filesystem     1024-blocks      Used Available Capacity  Mounted on
       );
       expect(
         estimateBatteryMinutes(
-            state: BatteryState.discharging, now: 1, rate: 0),
+          state: BatteryState.discharging,
+          now: 1,
+          rate: 0,
+        ),
         isNull,
       );
     });
@@ -277,16 +281,14 @@ Filesystem     1024-blocks      Used Available Capacity  Mounted on
         pickCpuTemperature([
           const LinuxTempSensor('acpitz', null, 30),
           const LinuxTempSensor('x86_pkg_temp', null, 55),
-        ])!
-            .chip,
+        ])!.chip,
         'x86_pkg_temp',
       );
       expect(
         pickCpuTemperature([
           const LinuxTempSensor('coretemp', 'Core 0', 50),
           const LinuxTempSensor('coretemp', 'Package id 0', 58),
-        ])!
-            .label,
+        ])!.label,
         'Package id 0',
       );
       // Unrelated sensors only: report nothing rather than a GPU or SSD.
@@ -330,7 +332,8 @@ Pages occupied by compressor:             50000.
     test('parseSwapUsage', () {
       expect(
         parseSwapUsage(
-            'total = 2048.00M  used = 1093.50M  free = 954.50M  (encrypted)'),
+          'total = 2048.00M  used = 1093.50M  free = 954.50M  (encrypted)',
+        ),
         (1093.5 * (1 << 20)).round(),
       );
       expect(parseSwapUsage('total = 0.00M  used = 0.00M  free = 0.00M'), 0);
@@ -562,8 +565,10 @@ garbage
     });
 
     test('battery on AC power is never flagged', () {
-      const battery =
-          BatteryStats(levelPercent: 5, state: BatteryState.charging);
+      const battery = BatteryStats(
+        levelPercent: 5,
+        state: BatteryState.charging,
+      );
       expect(battery.level, MetricLevel.normal);
       final items = buildStatusItems(
         _snapshot(battery: battery),

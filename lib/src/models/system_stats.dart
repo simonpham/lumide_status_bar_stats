@@ -31,15 +31,15 @@ class SystemStatsSnapshot {
   });
 
   Map<String, dynamic> toJson() => {
-        'timestamp': timestamp.toIso8601String(),
-        'cpu': cpu?.toJson(),
-        'ram': ram?.toJson(),
-        'disk': disk?.toJson(),
-        'network': network?.toJson(),
-        'battery': battery?.toJson(),
-        'thermal': thermal?.toJson(),
-        'session': session.toJson(),
-      };
+    'timestamp': timestamp.toIso8601String(),
+    'cpu': cpu?.toJson(),
+    'ram': ram?.toJson(),
+    'disk': disk?.toJson(),
+    'network': network?.toJson(),
+    'battery': battery?.toJson(),
+    'thermal': thermal?.toJson(),
+    'session': session.toJson(),
+  };
 
   String toFormattedJson() =>
       const JsonEncoder.withIndent('  ').convert(toJson());
@@ -58,11 +58,11 @@ class TopProcessInfo {
   });
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'cpuPercent': cpuPercent,
-        'rssBytes': rssBytes,
-        'rss': formatBytes(rssBytes),
-      };
+    'name': name,
+    'cpuPercent': cpuPercent,
+    'rssBytes': rssBytes,
+    'rss': formatBytes(rssBytes),
+  };
 }
 
 /// 1, 5 and 15 minute load averages (macOS and Linux only).
@@ -74,7 +74,8 @@ class LoadAverage {
   const LoadAverage(this.one, this.five, this.fifteen);
 
   @override
-  String toString() => '${one.toStringAsFixed(2)}, ${five.toStringAsFixed(2)}, '
+  String toString() =>
+      '${one.toStringAsFixed(2)}, ${five.toStringAsFixed(2)}, '
       '${fifteen.toStringAsFixed(2)}';
 
   Map<String, dynamic> toJson() => {'1m': one, '5m': five, '15m': fifteen};
@@ -97,15 +98,15 @@ class CpuStats {
   MetricLevel get level => usagePercent >= 90
       ? MetricLevel.critical
       : usagePercent >= 75
-          ? MetricLevel.warning
-          : MetricLevel.normal;
+      ? MetricLevel.warning
+      : MetricLevel.normal;
 
   Map<String, dynamic> toJson() => {
-        'usagePercent': usagePercent,
-        'coreCount': coreCount,
-        'loadAverage': loadAverage?.toJson(),
-        'topProcesses': topProcesses.map((p) => p.toJson()).toList(),
-      };
+    'usagePercent': usagePercent,
+    'coreCount': coreCount,
+    'loadAverage': loadAverage?.toJson(),
+    'topProcesses': topProcesses.map((p) => p.toJson()).toList(),
+  };
 }
 
 /// Physical memory and swap.
@@ -130,28 +131,28 @@ class RamStats {
   MetricLevel get level => usagePercent >= 90
       ? MetricLevel.critical
       : usagePercent >= 80
-          ? MetricLevel.warning
-          : MetricLevel.normal;
+      ? MetricLevel.warning
+      : MetricLevel.normal;
 
   RamStats withTopProcesses(List<TopProcessInfo> processes) => RamStats(
-        totalBytes: totalBytes,
-        usedBytes: usedBytes,
-        swapUsedBytes: swapUsedBytes,
-        topProcesses: processes,
-      );
+    totalBytes: totalBytes,
+    usedBytes: usedBytes,
+    swapUsedBytes: swapUsedBytes,
+    topProcesses: processes,
+  );
 
   Map<String, dynamic> toJson() => {
-        'totalBytes': totalBytes,
-        'usedBytes': usedBytes,
-        'availableBytes': availableBytes,
-        'usagePercent': usagePercent,
-        'swapUsedBytes': swapUsedBytes,
-        'used': formatBytes(usedBytes),
-        'total': formatBytes(totalBytes),
-        'available': formatBytes(availableBytes),
-        'swapUsed': swapUsedBytes == null ? null : formatBytes(swapUsedBytes!),
-        'topProcesses': topProcesses.map((p) => p.toJson()).toList(),
-      };
+    'totalBytes': totalBytes,
+    'usedBytes': usedBytes,
+    'availableBytes': availableBytes,
+    'usagePercent': usagePercent,
+    'swapUsedBytes': swapUsedBytes,
+    'used': formatBytes(usedBytes),
+    'total': formatBytes(totalBytes),
+    'available': formatBytes(availableBytes),
+    'swapUsed': swapUsedBytes == null ? null : formatBytes(swapUsedBytes!),
+    'topProcesses': topProcesses.map((p) => p.toJson()).toList(),
+  };
 }
 
 /// Space on the volume that holds the system (`/`, or the system drive on
@@ -179,18 +180,18 @@ class DiskStats {
   MetricLevel get level => usagePercent >= 95
       ? MetricLevel.critical
       : usagePercent >= 85
-          ? MetricLevel.warning
-          : MetricLevel.normal;
+      ? MetricLevel.warning
+      : MetricLevel.normal;
 
   Map<String, dynamic> toJson() => {
-        'volume': volume,
-        'totalBytes': totalBytes,
-        'usedBytes': usedBytes,
-        'freeBytes': freeBytes,
-        'usagePercent': usagePercent,
-        'total': formatBytes(totalBytes),
-        'free': formatBytes(freeBytes),
-      };
+    'volume': volume,
+    'totalBytes': totalBytes,
+    'usedBytes': usedBytes,
+    'freeBytes': freeBytes,
+    'usagePercent': usagePercent,
+    'total': formatBytes(totalBytes),
+    'free': formatBytes(freeBytes),
+  };
 }
 
 /// Network throughput of the primary interface.
@@ -209,12 +210,12 @@ class NetworkStats {
   String get formattedUpload => formatRate(uploadBytesPerSec);
 
   Map<String, dynamic> toJson() => {
-        'interface': interface,
-        'downloadBytesPerSec': downloadBytesPerSec,
-        'uploadBytesPerSec': uploadBytesPerSec,
-        'download': formattedDownload,
-        'upload': formattedUpload,
-      };
+    'interface': interface,
+    'downloadBytesPerSec': downloadBytesPerSec,
+    'uploadBytesPerSec': uploadBytesPerSec,
+    'download': formattedDownload,
+    'upload': formattedUpload,
+  };
 }
 
 /// Whether the battery is charging, discharging, or plugged in but idle.
@@ -239,27 +240,27 @@ class BatteryStats {
   bool get isOnBattery => state == BatteryState.discharging;
 
   String get stateLabel => switch (state) {
-        BatteryState.charging => 'Charging',
-        BatteryState.discharging => 'On battery',
-        BatteryState.full => 'Fully charged',
-        BatteryState.notCharging => 'Plugged in, not charging',
-        BatteryState.unknown => 'Unknown',
-      };
+    BatteryState.charging => 'Charging',
+    BatteryState.discharging => 'On battery',
+    BatteryState.full => 'Fully charged',
+    BatteryState.notCharging => 'Plugged in, not charging',
+    BatteryState.unknown => 'Unknown',
+  };
 
   MetricLevel get level => !isOnBattery
       ? MetricLevel.normal
       : levelPercent <= 10
-          ? MetricLevel.critical
-          : levelPercent <= 20
-              ? MetricLevel.warning
-              : MetricLevel.normal;
+      ? MetricLevel.critical
+      : levelPercent <= 20
+      ? MetricLevel.warning
+      : MetricLevel.normal;
 
   Map<String, dynamic> toJson() => {
-        'levelPercent': levelPercent,
-        'state': state.name,
-        'stateLabel': stateLabel,
-        'timeRemainingMinutes': timeRemainingMinutes,
-      };
+    'levelPercent': levelPercent,
+    'state': state.name,
+    'stateLabel': stateLabel,
+    'timeRemainingMinutes': timeRemainingMinutes,
+  };
 }
 
 /// CPU temperature, plus fan speed where the hardware reports it.
@@ -281,22 +282,22 @@ class ThermalStats {
   MetricLevel get level => temperatureCelsius >= 90
       ? MetricLevel.critical
       : temperatureCelsius >= 80
-          ? MetricLevel.warning
-          : MetricLevel.normal;
+      ? MetricLevel.warning
+      : MetricLevel.normal;
 
   String get status => switch (level) {
-        MetricLevel.normal => 'Normal',
-        MetricLevel.warning => 'Warm',
-        MetricLevel.critical => 'Hot',
-      };
+    MetricLevel.normal => 'Normal',
+    MetricLevel.warning => 'Warm',
+    MetricLevel.critical => 'Hot',
+  };
 
   Map<String, dynamic> toJson() => {
-        'temperatureCelsius': temperatureCelsius,
-        'temperatureFahrenheit': temperatureFahrenheit,
-        'status': status,
-        'source': source,
-        'fanRpm': fanRpm,
-      };
+    'temperatureCelsius': temperatureCelsius,
+    'temperatureFahrenheit': temperatureFahrenheit,
+    'status': status,
+    'source': source,
+    'fanRpm': fanRpm,
+  };
 }
 
 /// How long Lumide has been running this plugin, and the plugin's memory.
@@ -307,9 +308,9 @@ class SessionStats {
   const SessionStats({required this.uptime, required this.pluginRssBytes});
 
   Map<String, dynamic> toJson() => {
-        'uptimeSeconds': uptime.inSeconds,
-        'uptime': formatDuration(uptime),
-        'pluginRssBytes': pluginRssBytes,
-        'pluginRss': formatBytes(pluginRssBytes),
-      };
+    'uptimeSeconds': uptime.inSeconds,
+    'uptime': formatDuration(uptime),
+    'pluginRssBytes': pluginRssBytes,
+    'pluginRss': formatBytes(pluginRssBytes),
+  };
 }

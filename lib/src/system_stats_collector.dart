@@ -130,8 +130,9 @@ class SystemStatsCollector {
     } on ProcessException {
       return null;
     }
-    final stdoutFuture =
-        process.stdout.transform(const SystemEncoding().decoder).join();
+    final stdoutFuture = process.stdout
+        .transform(const SystemEncoding().decoder)
+        .join();
     unawaited(process.stderr.drain<void>());
     try {
       final exitCode = await process.exitCode.timeout(timeout);
@@ -223,8 +224,9 @@ class SystemStatsCollector {
         _run('vm_stat', const []),
         _run('sysctl', ['-n', 'vm.swapusage']),
       ]);
-      final used =
-          results[0] == null ? null : parseVmStatUsedBytes(results[0]!);
+      final used = results[0] == null
+          ? null
+          : parseVmStatUsedBytes(results[0]!);
       if (used == null) return null;
       return RamStats(
         totalBytes: total,
@@ -289,7 +291,7 @@ class SystemStatsCollector {
   }
 
   Future<({NetCounters counters, String? interface})?>
-      _readNetCounters() async {
+  _readNetCounters() async {
     if (Platform.isLinux) {
       final results = await Future.wait([
         _readFile('/proc/net/dev'),
@@ -300,15 +302,17 @@ class SystemStatsCollector {
       final defaults = results[1] == null
           ? <String>{}
           : parseProcNetRouteDefaults(results[1]!);
-      final counters = (defaults.isEmpty
+      final counters =
+          (defaults.isEmpty
               ? null
               : parseProcNetDev(dev, interfaces: defaults)) ??
           parseProcNetDev(dev);
       if (counters == null) return null;
       return (
         counters: counters,
-        interface:
-            defaults.isEmpty ? null : (defaults.toList()..sort()).join(', '),
+        interface: defaults.isEmpty
+            ? null
+            : (defaults.toList()..sort()).join(', '),
       );
     }
 
@@ -316,8 +320,9 @@ class SystemStatsCollector {
       final interface = await _macDefaultInterface();
       if (interface == null) return null;
       final output = await _run('netstat', ['-b', '-n', '-I', interface]);
-      final counters =
-          output == null ? null : parseNetstatInterface(output, interface);
+      final counters = output == null
+          ? null
+          : parseNetstatInterface(output, interface);
       if (counters == null) {
         _macInterface = null; // Look the route up again next time.
         return null;
@@ -475,8 +480,7 @@ class SystemStatsCollector {
             if (celsius == null) continue;
             final label = (await _readFile(
               '${entity.path}/temp${i}_label',
-            ))
-                ?.trim();
+            ))?.trim();
             candidates.add((
               path: path,
               sensor: LinuxTempSensor(chip, label, celsius),

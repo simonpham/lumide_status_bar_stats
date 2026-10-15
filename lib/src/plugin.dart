@@ -149,14 +149,14 @@ class LumideStatusBarStatsPlugin extends LumidePlugin {
   }
 
   static Metric? _collectorMetric(StatusMetric metric) => switch (metric) {
-        StatusMetric.cpu => Metric.cpu,
-        StatusMetric.ram => Metric.ram,
-        StatusMetric.disk => Metric.disk,
-        StatusMetric.network => Metric.network,
-        StatusMetric.battery => Metric.battery,
-        StatusMetric.thermal => Metric.thermal,
-        StatusMetric.uptime => null,
-      };
+    StatusMetric.cpu => Metric.cpu,
+    StatusMetric.ram => Metric.ram,
+    StatusMetric.disk => Metric.disk,
+    StatusMetric.network => Metric.network,
+    StatusMetric.battery => Metric.battery,
+    StatusMetric.thermal => Metric.thermal,
+    StatusMetric.uptime => null,
+  };
 
   Future<SystemStatsSnapshot> _collect() async {
     final snapshot = await _collector.collect(
@@ -170,8 +170,8 @@ class LumideStatusBarStatsPlugin extends LumidePlugin {
   /// Collects metrics and updates the status bar and dashboard. Calls made
   /// while a refresh is running share it.
   Future<void> _refresh() => _tickInFlight ??= _tick().whenComplete(() {
-        _tickInFlight = null;
-      });
+    _tickInFlight = null;
+  });
 
   Future<void> _tick() async {
     if (!_active) return;

@@ -41,13 +41,12 @@ class MenuHandler {
       String id,
       String title,
       Future<void> Function(Map<String, int>? position) action,
-    ) =>
-        context.commands.registerCommand(
-          id: id,
-          title: title,
-          category: 'System Stats',
-          callback: ([args]) => action(_parsePosition(args)),
-        );
+    ) => context.commands.registerCommand(
+      id: id,
+      title: title,
+      category: 'System Stats',
+      callback: ([args]) => action(_parsePosition(args)),
+    );
 
     await register(
       'lumide-stats.showQuickMenu',
@@ -223,7 +222,8 @@ class MenuHandler {
       QuickPickItem(
         label: 'Battery Saver',
         description: config.batterySaverMode ? 'On' : 'Off',
-        tooltip: 'Refresh every ${LumideStatsConfig.batterySaverInterval}s or '
+        tooltip:
+            'Refresh every ${LumideStatsConfig.batterySaverInterval}s or '
             'slower while on battery power',
         icon: 'battery',
         payload: 'saver',
@@ -292,8 +292,9 @@ class MenuHandler {
       for (final seconds in options)
         QuickPickItem(
           label: '$seconds second${seconds == 1 ? '' : 's'}',
-          description:
-              config.updateIntervalSeconds == seconds ? 'Current' : null,
+          description: config.updateIntervalSeconds == seconds
+              ? 'Current'
+              : null,
           icon: config.updateIntervalSeconds == seconds ? 'check' : 'timer',
           payload: '$seconds',
         ),

@@ -52,19 +52,20 @@ class LumideStatsConfig {
     this.batterySaverMode = true,
     this.priorityBase = 1000,
     this.showTopBarIcon = true,
-  })  : enabledMetrics = enabledMetrics ??
-            (StatusMetric.values.toSet()..remove(StatusMetric.uptime)),
-        compactMetrics = compactMetrics ?? StatusMetric.values.toSet();
+  }) : enabledMetrics =
+           enabledMetrics ??
+           (StatusMetric.values.toSet()..remove(StatusMetric.uptime)),
+       compactMetrics = compactMetrics ?? StatusMetric.values.toSet();
 
   /// Every setting key this plugin reads.
   static List<String> get allKeys => [
-        intervalKey,
-        fahrenheitKey,
-        priorityKey,
-        batterySaverKey,
-        toolbarIconKey,
-        for (final m in StatusMetric.values) ...[m.enableKey, m.compactKey],
-      ];
+    intervalKey,
+    fahrenheitKey,
+    priorityKey,
+    batterySaverKey,
+    toolbarIconKey,
+    for (final m in StatusMetric.values) ...[m.enableKey, m.compactKey],
+  ];
 
   bool isEnabled(StatusMetric metric) => enabledMetrics.contains(metric);
   bool isCompact(StatusMetric metric) => compactMetrics.contains(metric);

@@ -8,10 +8,10 @@ const _warningColor = '#FF9800';
 const _criticalColor = '#F44336';
 
 String? _colorFor(MetricLevel level) => switch (level) {
-      MetricLevel.normal => null,
-      MetricLevel.warning => _warningColor,
-      MetricLevel.critical => _criticalColor,
-    };
+  MetricLevel.normal => null,
+  MetricLevel.warning => _warningColor,
+  MetricLevel.critical => _criticalColor,
+};
 
 /// What one status bar item should show.
 class StatusItemSpec {
@@ -145,8 +145,9 @@ List<StatusItemSpec> buildStatusItems(
     add(
       StatusMetric.battery,
       compact: level,
-      standard:
-          battery.isCharging ? 'Battery $level, charging' : 'Battery $level',
+      standard: battery.isCharging
+          ? 'Battery $level, charging'
+          : 'Battery $level',
       icon: battery.isCharging ? 'battery-charging' : 'battery',
       level: battery.level,
       tooltip: [
