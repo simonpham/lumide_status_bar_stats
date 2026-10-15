@@ -1,121 +1,96 @@
-# Lumide IDE Status Bar System Monitor (`lumide_status_bar_stats`)
+# lumide_status_bar_stats
 
-A powerful, real-time system stats monitor plugin for **[Lumide IDE](https://pub.dev/packages/lumide_api)** built using `lumide_api`.
+[![pub package](https://img.shields.io/pub/v/lumide_status_bar_stats.svg)](https://pub.dev/packages/lumide_status_bar_stats) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Drawing inspiration from macOS **Stats** (`exelban/stats`) and Windows Taskbar Stats, this plugin displays live hardware metrics directly in the Lumide IDE status bar with color alerts, interactive QuickPick menus, diagnostic reports, and customizable settings.
+System stats in the [Lumide IDE](https://lumide.dev) status bar: CPU, memory, disk, network, battery and CPU temperature, refreshed every couple of seconds.
 
----
+![System stats in the Lumide status bar](https://raw.githubusercontent.com/simonpham/lumide_status_bar_stats/develop/doc/status_bar.png)
 
-## 🌟 Key Features
+## Features
 
-- ⚡ **CPU Utilization & Load**: Real-time CPU percentage, 1m / 5m / 15m load averages, core count.
-- 🧠 **RAM / Memory Monitor**: Used & total RAM in GB, percentage used, free memory, swap usage.
-- 💾 **Disk Space & Utilization**: Available free disk space on root volume, used space, total capacity.
-- 🌐 **Network I/O Traffic**: Dynamic real-time download & upload speeds (`KB/s` / `MB/s`).
-- 🔋 **Battery State & Health**: Battery percentage, charging/discharging state, estimated time remaining.
-- 🌡️ **Thermal Sensor Readout**: Temperature monitoring in Celsius (°C) or Fahrenheit (°F) with warning states.
-- ⏱️ **IDE Session Uptime**: Plugin uptime counter and plugin RSS memory footprint tracker.
-- 🎨 **Dynamic Color Alerts**: Green (Normal), Orange (Warning > 75%), Red (Critical > 90%).
-- 📊 **Detailed Diagnostics Dashboard**: Interactive modal popups with complete system hardware breakdown.
-- 🖱️ **Clickable Status Bar Items**: Clicking any status bar item opens the Lumide QuickPick menu.
-- 🔋 **Smart Battery Saver Mode**: Automatically slows down polling rate when running on battery power to conserve energy.
+- **CPU**: usage across all cores, with load averages in the tooltip (Linux and macOS).
+- **Memory**: percentage used, or used and total; available memory and swap in the tooltip.
+- **Disk**: free space on the system disk.
+- **Network**: download and upload rates of the active connection.
+- **Battery**: level, charging state and time remaining. Hidden on desktops.
+- **CPU temperature**: from the CPU package sensor, in °C or °F. Fan speed on Macs with fans.
+- **Session uptime** (off by default): how long Lumide has been running.
+- **Alerts**: items turn orange or red when CPU, memory, disk, temperature or battery needs attention.
+- **Quick menu**: click any item to change its style or hide it. The toolbar icon opens every option.
+- **Dashboard**: live charts and the top processes by CPU and memory.
+- **Battery Saver**: refreshes every 10 seconds or slower while on battery power.
 
----
+![Quick menu](https://raw.githubusercontent.com/simonpham/lumide_status_bar_stats/develop/doc/quick_menu.png)
 
-## 🚀 Quick Start & Installation
+![Dashboard](https://raw.githubusercontent.com/simonpham/lumide_status_bar_stats/develop/doc/dashboard.png)
 
-### 1. Add to Lumide IDE Plugins
-Include `lumide_status_bar_stats` in your Lumide plugin configuration or build as a standalone Dart binary executable.
+## Installation
 
-```yaml
-dependencies:
-  lumide_api: ^1.7.0
-  lumide_status_bar_stats: ^1.0.0
-```
+1. Open the **Plugins** pane (`Cmd+Shift+X` / `Ctrl+Shift+X`).
+2. Search for `lumide_status_bar_stats`, or browse the **Utilities** category.
+3. Click **Install**. The items appear in the status bar right away.
 
-### 2. Entry Point
-The plugin entry point is located at `bin/main.dart`:
+## Commands
 
-```dart
-import 'package:lumide_status_bar_stats/lumide_status_bar_stats.dart';
+Open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and type `System Stats`.
 
-void main() => LumideStatusBarStatsPlugin().run();
-```
+| Command | Purpose |
+| --- | --- |
+| `System Stats: Open Quick Menu` | All options: dashboard, refresh interval, units, items to show |
+| `System Stats: Show Dashboard` | Live charts and top processes |
+| `System Stats: Show Report in Output` | Write a text summary to the Output pane |
+| `System Stats: Refresh Now` | Read every metric again |
+| `System Stats: Toggle CPU` / `RAM` / `Disk` / `Network` / `Battery` / `Temperature` / `Uptime` | Show or hide an item |
+| `System Stats: Toggle Toolbar Icon` | Show or hide the toolbar button |
 
----
+Changes made from the menus are saved to your settings.
 
-## 🎮 Interactive QuickPick Menus & Commands
+## Settings
 
-Clicking **any status bar item** or triggering `lumide-stats.showQuickMenu` from the Command Palette opens the interactive QuickPick menu:
+Change these in the **Installed** tab of the Plugins pane (⚙ next to System Stats).
 
-- 📊 **Show Detailed Dashboard**: View complete system & IDE diagnostic stats.
-- ⚙️ **Configure Visible Metrics**: Enable or disable CPU, RAM, Disk, Network, Battery, Thermal, or Uptime items.
-- ⏱️ **Set Refresh Interval**: Choose polling rate (1s, 2s, 5s, 10s, 30s).
-- 🌡️ **Temperature Unit**: Toggle between Celsius (°C) and Fahrenheit (°F).
-- 🏷️ **Display Style**: Toggle between Compact Icon Mode and Standard Text Labels.
-- 🔋 **Battery Saver Mode**: Toggle auto-throttling on battery.
-- 🔄 **Refresh Metrics Now**: Instantly re-sample hardware statistics.
-- 📋 **Copy Diagnostics Report**: Generate formatted JSON report for troubleshooting.
+| Key | Default | Description |
+| --- | --- | --- |
+| `lumideStats.enableCpu` | `true` | Show CPU usage |
+| `lumideStats.enableRam` | `true` | Show memory usage |
+| `lumideStats.enableDisk` | `true` | Show free disk space |
+| `lumideStats.enableNetwork` | `true` | Show network rates |
+| `lumideStats.enableBattery` | `true` | Show the battery (only on machines with one) |
+| `lumideStats.enableThermal` | `true` | Show CPU temperature (only where a sensor is available) |
+| `lumideStats.enableUptime` | `false` | Show the session uptime |
+| `lumideStats.compactCpu` … `compactUptime` | `true` | Show only the icon and value. Turn off to add a label, e.g. `CPU 42%` or `RAM 8.0 GB / 16 GB` |
+| `lumideStats.useFahrenheit` | `false` | Show temperatures in °F |
+| `lumideStats.updateIntervalSeconds` | `2` | Refresh interval, 1–60 seconds |
+| `lumideStats.batterySaverMode` | `true` | Refresh every 10 seconds or slower on battery power |
+| `lumideStats.priorityBase` | `1000` | Status bar priority. Change it to move the items |
+| `lumideStats.showTopBarIcon` | `true` | Show the System Stats button in the toolbar |
 
----
+Disk space is read at most every 30 seconds and the battery every 15 seconds. Hidden metrics aren't read, except the battery state, which Battery Saver needs.
 
-## ⚙️ Configuration Settings
+## Platform support
 
-Customize behavior via Lumide Workspace Settings (`settings.json`):
+| Metric | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| CPU | `/proc/stat` | Mach host statistics | `GetSystemTimes` |
+| Memory | `/proc/meminfo` | `vm_stat`, `sysctl` | `GlobalMemoryStatusEx` |
+| Disk | `df` | `df` | `GetDiskFreeSpaceExW` |
+| Network | `/proc/net/dev`, `/proc/net/route` | `route`, `netstat` | `netstat -e` |
+| Battery | `/sys/class/power_supply` | `pmset` | `GetSystemPowerStatus` |
+| CPU temperature | `/sys/class/hwmon`, `/sys/class/thermal` | SMC (read-only) | Not available |
+| Top processes | `ps` | `ps` | Not available |
 
-```json
-{
-  "lumideStats.updateIntervalSeconds": 2,
-  "lumideStats.enabledMetrics": ["cpu", "ram", "disk", "network", "battery", "thermal", "uptime"],
-  "lumideStats.temperatureUnit": "celsius",
-  "lumideStats.compactMode": false,
-  "lumideStats.batterySaverMode": true
-}
-```
+- **Windows**: CPU temperature is only exposed to administrators, so the item stays hidden.
+- **Linux**: Lumide doesn't support webviews on Linux yet, so **Show Dashboard** writes the report to the Output pane instead.
+- **Network** counts the interface that holds the default route. With a VPN, that is usually the VPN interface.
 
----
+## Permissions
 
-## 📐 Architecture & Project Structure
+The plugin only reads system information. It doesn't write files, change system settings, or make network requests. `plugin.yaml` lists what it reads:
 
-```
-lumide_status_bar_stats/
-├── bin/
-│   └── main.dart                     # Executable entrypoint for Lumide IDE RPC runner
-├── lib/
-│   ├── lumide_status_bar_stats.dart  # Main library export
-│   └── src/
-│       ├── config.dart               # Settings & workspace configuration manager
-│       ├── menu_handler.dart         # QuickPick popups, commands, & dashboard
-│       ├── plugin.dart               # Core plugin class extending LumidePlugin
-│       ├── status_bar_manager.dart   # Status bar items, colors, tooltips & priority
-│       ├── system_stats_collector.dart# Cross-platform (macOS/Linux/Windows) stats engine
-│       └── models/
-│           └── system_stats.dart     # System metric data models & JSON serializers
-├── lumide_manifest.json              # Official Lumide plugin manifest schema
-├── example/
-│   └── lumide_status_bar_stats_example.dart
-└── test/
-    └── lumide_status_bar_stats_test.dart
-```
+- **Files (Linux)**: `/proc/stat`, `/proc/loadavg`, `/proc/meminfo`, `/proc/net/dev`, `/proc/net/route`, and `/sys/class/hwmon`, `/sys/class/thermal`, `/sys/class/power_supply`.
+- **Commands**: `df` and `ps` (Linux and macOS); `vm_stat`, `sysctl`, `route` and `pmset` (macOS); `netstat` (macOS and Windows). `ps` only runs while the dashboard is open.
+- **System libraries**: CPU usage, load averages and the SMC on macOS, and kernel32 on Windows, are read through Dart FFI.
 
----
+## License
 
-## 🧪 Testing
-
-Run the automated test suite:
-
-```bash
-dart test
-```
-
-Run static analysis:
-
-```bash
-dart analyze
-```
-
----
-
-## 📄 License
-
-MIT License. Developed for **Lumide IDE**.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
