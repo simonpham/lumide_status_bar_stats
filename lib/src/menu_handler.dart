@@ -1,13 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:lumide_api/lumide_api.dart';
 
 import 'config.dart';
 import 'models/system_stats.dart';
 import 'status_bar_manager.dart';
 import 'system_stats_collector.dart';
-import 'smc_ffi.dart';
-import 'smc_helper_installer.dart';
 
 /// Interactive QuickPick Menu, Commands, and Dashboard Handler for Lumide Stats Plugin
 class MenuHandler {
@@ -18,7 +15,6 @@ class MenuHandler {
 
   SystemStatsSnapshot? _latestSnapshot;
   LumideWebviewPanel? _dashboardPanel;
-  String _currentFanMode = 'Auto'; // 'Auto', 'Max', 'Eco'
 
   MenuHandler({
     required this.context,
@@ -29,7 +25,7 @@ class MenuHandler {
 
   /// Update the latest snapshot reference and post real-time updates to Webview panel
   void updateSnapshot(SystemStatsSnapshot snapshot) {
-    _latestSnapshot = _applyFanState(snapshot);
+    _latestSnapshot = snapshot;
     if (_dashboardPanel != null) {
       final jsonStr = jsonEncode({
         'type': 'update',
@@ -42,38 +38,6 @@ class MenuHandler {
         _dashboardPanel = null;
       }
     }
-  }
-
-  SystemStatsSnapshot _applyFanState(SystemStatsSnapshot snap) {
-    int rpm = snap.thermal.fanRpm;
-    if (_currentFanMode == '100%' || _currentFanMode == 'Max') {
-      rpm = snap.thermal.fanRpm > 0 ? snap.thermal.fanRpm : 5800;
-    } else if (_currentFanMode == '75%') {
-      rpm = snap.thermal.fanRpm > 0 ? snap.thermal.fanRpm : 4600;
-    } else if (_currentFanMode == '50%') {
-      rpm = snap.thermal.fanRpm > 0 ? snap.thermal.fanRpm : 3500;
-    } else if (_currentFanMode == '25%') {
-      rpm = snap.thermal.fanRpm > 0 ? snap.thermal.fanRpm : 2350;
-    } else if (_currentFanMode == 'Quiet' || _currentFanMode == 'Eco') {
-      rpm = snap.thermal.fanRpm > 0 ? snap.thermal.fanRpm : 1200;
-    }
-    final updatedThermal = ThermalStats(
-      temperatureCelsius: snap.thermal.temperatureCelsius,
-      status: snap.thermal.status,
-      fanRpm: rpm,
-      fanCount: snap.thermal.fanCount,
-      fanMode: _currentFanMode,
-    );
-    return SystemStatsSnapshot(
-      timestamp: snap.timestamp,
-      cpu: snap.cpu,
-      ram: snap.ram,
-      disk: snap.disk,
-      network: snap.network,
-      battery: snap.battery,
-      thermal: updatedThermal,
-      session: snap.session,
-    );
   }
 
   /// Safely parse position coordinates from host command arguments
@@ -355,13 +319,6 @@ class MenuHandler {
     if (metric == 'thermal') {
       items.addAll([
         QuickPickItem(
-          label: 'Fan Control Mode',
-          description: _currentFanMode,
-          tooltip: 'Set cooling fan mode (Auto, Full Speed, Quiet)',
-          payload: 'fan_control',
-          icon: 'thermometer',
-        ),
-        QuickPickItem(
           label: 'Temp Unit',
           description: isC ? 'Celsius (°C)' : 'Fahrenheit (°F)',
           tooltip: 'Switch temperature unit between °C and °F',
@@ -438,9 +395,6 @@ class MenuHandler {
       case 'dashboard':
         await showDashboard();
         break;
-      case 'fan_control':
-        await _showFanControlMenu(position);
-        break;
       case 'temp':
         config.temperatureUnit = config.temperatureUnit == 'celsius'
             ? 'fahrenheit'
@@ -462,13 +416,6 @@ class MenuHandler {
         tooltip: 'Open system telemetry webview panel',
         payload: 'dashboard',
         icon: 'gauge',
-      ),
-      QuickPickItem(
-        label: 'Fan Control',
-        description: _currentFanMode,
-        tooltip: 'Set cooling fan mode (Auto, Max Cooling, Quiet)',
-        payload: 'fan_control',
-        icon: 'thermometer',
       ),
       QuickPickItem(
         label: 'Refresh Rate',
@@ -558,9 +505,6 @@ class MenuHandler {
       case 'dashboard':
         await showDashboard();
         break;
-      case 'fan_control':
-        await _showFanControlMenu(position);
-        break;
       case 'speed':
         await _showSetIntervalMenu(position);
         break;
@@ -590,144 +534,6 @@ class MenuHandler {
         } catch (_) {}
         break;
     }
-  }
-
-  /// Sub-menu for Fan Speed Control (Auto, 100%, 75%, 50%, 25%, Quiet)
-  Future<void> _showFanControlMenu([Map<String, int>? position]) async {
-    final isSupported = await SmcHelperInstaller.isSupported();
-    if (!isSupported) {
-      await context.window.showMessage(
-        'Fan control is not supported on this hardware (fanless or passive cooling device).',
-        title: 'Lumide Stats',
-      );
-      return;
-    }
-
-    final isHelperInstalled = await SmcHelperInstaller.isInstalled();
-
-    final options = [
-      {
-        'mode': 'Auto',
-        'label': 'Auto',
-        'desc': 'Automatic system thermal management',
-      },
-      {
-        'mode': '100%',
-        'label': '100%',
-        'desc': 'Maximum cooling speed (100% hardware max)',
-      },
-      {
-        'mode': '75%',
-        'label': '75%',
-        'desc': 'High cooling speed (75% hardware max)',
-      },
-      {
-        'mode': '50%',
-        'label': '50%',
-        'desc': 'Medium cooling speed (50% hardware max)',
-      },
-      {
-        'mode': '25%',
-        'label': '25%',
-        'desc': 'Low cooling speed (25% hardware max)',
-      },
-      {
-        'mode': 'Quiet',
-        'label': 'Quiet',
-        'desc': 'Minimum fan speed (0% manual offset)',
-      },
-    ];
-
-    final items = options.map((opt) {
-      final mode = opt['mode']!;
-      final label = opt['label']!;
-      final desc = opt['desc']!;
-      final isCurrent = _currentFanMode == mode;
-      return QuickPickItem(
-        label: label,
-        description: isCurrent ? 'Active' : null,
-        tooltip: desc,
-        icon: isCurrent ? 'check' : 'thermometer',
-        payload: mode,
-      );
-    }).toList();
-
-    if (Platform.isMacOS && !isHelperInstalled) {
-      items.add(const QuickPickItem(label: 'SMC Helper', isSeparator: true));
-      items.add(
-        const QuickPickItem(
-          label: 'Enable Passwordless Fan Control',
-          description: 'One-Time Setup',
-          tooltip:
-              'Grant persistent passwordless permission to control fans across system restarts',
-          icon: 'key',
-          payload: 'install_helper',
-        ),
-      );
-    }
-
-    final selected = await context.window.showQuickPick(
-      items,
-      placeholder: 'Fan Control Mode',
-      position: position,
-    );
-
-    if (selected == null) return;
-
-    final key = _extractSelectedKey(selected, items);
-    if (key == 'install_helper') {
-      final ok = await SmcHelperInstaller.install();
-      if (ok) {
-        await context.window.showMessage(
-          'Passwordless Fan Control Helper installed successfully!',
-          title: 'Lumide Stats',
-        );
-      } else {
-        await context.window.showMessage(
-          'Failed to install Fan Control Helper. Admin permission was cancelled.',
-          title: 'Lumide Stats',
-        );
-      }
-      return;
-    }
-
-    if (key.isNotEmpty) {
-      await setFanMode(key);
-    }
-  }
-
-  /// Execute native Apple SMC Fan Speed mode change using 100% pure Dart FFI & SmcHelperInstaller
-  Future<void> setFanMode(String mode) async {
-    _currentFanMode = mode;
-
-    try {
-      if (Platform.isMacOS) {
-        await SmcHelperInstaller.setMode(mode);
-
-        if (AppleSmc.shared.isAvailable) {
-          final count = AppleSmc.shared.getFanCount();
-          final fanCount = count > 0 ? count : 2;
-
-          if (mode == 'Auto') {
-            for (int i = 0; i < fanCount; i++) {
-              AppleSmc.shared.setFanSpeed(i, 0, manual: false);
-            }
-          } else {
-            int pct = 100;
-            if (mode == '75%') pct = 75;
-            if (mode == '50%') pct = 50;
-            if (mode == '25%') pct = 25;
-            if (mode == 'Quiet' || mode == 'Eco') pct = 0;
-
-            for (int i = 0; i < fanCount; i++) {
-              AppleSmc.shared.setFanSpeed(i, pct, manual: true);
-            }
-          }
-        }
-      }
-    } catch (_) {}
-
-    await refreshNow();
   }
 
   /// Sub-menu to configure per-item compact vs standard display styles
@@ -778,8 +584,7 @@ class MenuHandler {
   Future<void> showDashboard() async {
     _dashboardPanel = null;
 
-    final rawSnap = _latestSnapshot ?? await collector.collect();
-    final snap = _applyFanState(rawSnap);
+    final snap = _latestSnapshot ?? await collector.collect();
     final html = _generateDashboardHtml(snap);
 
     try {
@@ -812,9 +617,6 @@ class MenuHandler {
               ? 'fahrenheit'
               : 'celsius';
           await refreshNow();
-        } else if (action == 'setFanMode') {
-          final mode = payload['mode']?.toString() ?? 'Auto';
-          await setFanMode(mode);
         }
       });
     } catch (_) {
@@ -851,7 +653,7 @@ Network Speed:
 Download: ${snap.network.formattedDownload} | Upload: ${snap.network.formattedUpload}
 
 Battery: $batStr
-Thermal Sensor: Average CPU $tempStr (${snap.thermal.status}) | Fan: ${snap.thermal.fanRpm > 0 ? "${snap.thermal.fanRpm} RPM (${snap.thermal.fanMode})" : "Auto"}
+Thermal Sensor: Average CPU $tempStr (${snap.thermal.status})
 
 IDE Session Uptime: ${snap.session.formattedUptime}
 Plugin RSS Memory: ${snap.session.rssMb.toStringAsFixed(1)} MB
@@ -972,18 +774,6 @@ Plugin RSS Memory: ${snap.session.rssMb.toStringAsFixed(1)} MB
     button:hover {
       background: var(--accent-hover);
       border-color: var(--accent);
-    }
-
-    .fan-btn {
-      padding: 3px 6px;
-      font-size: 10px;
-      border-radius: 4px;
-    }
-
-    .fan-btn.active {
-      background: color-mix(in srgb, var(--accent) 25%, transparent);
-      border-color: var(--accent);
-      color: var(--text);
     }
 
     /* Clean Natural Bento Grid Layout */
@@ -1136,22 +926,14 @@ Plugin RSS Memory: ${snap.session.rssMb.toStringAsFixed(1)} MB
       </div>
     </div>
 
-    <!-- Thermal & Fan Control Bento Card -->
+    <!-- Thermal Bento Card -->
     <div class="card">
       <div class="card-header">
-        <span class="card-title">Thermal & Fan</span>
+        <span class="card-title">Thermal</span>
         <span id="thermal-status" class="badge">${snap.thermal.status}</span>
       </div>
       <div id="thermal-val" class="card-value">$tempVal$tempUnit</div>
       <div id="fan-rpm" class="sub-text mono-sub">Speed: ${snap.thermal.fanRpm > 0 ? "${snap.thermal.fanRpm} RPM" : "Auto"}</div>
-      <div style="display: flex; gap: 3px; margin-top: 6px; flex-wrap: wrap;">
-        <button class="fan-btn ${snap.thermal.fanMode == 'Auto' ? 'active' : ''}" onclick="setFanMode('Auto')">Auto</button>
-        <button class="fan-btn ${(snap.thermal.fanMode == '100%' || snap.thermal.fanMode == 'Max') ? 'active' : ''}" onclick="setFanMode('100%')">100%</button>
-        <button class="fan-btn ${snap.thermal.fanMode == '75%' ? 'active' : ''}" onclick="setFanMode('75%')">75%</button>
-        <button class="fan-btn ${snap.thermal.fanMode == '50%' ? 'active' : ''}" onclick="setFanMode('50%')">50%</button>
-        <button class="fan-btn ${snap.thermal.fanMode == '25%' ? 'active' : ''}" onclick="setFanMode('25%')">25%</button>
-        <button class="fan-btn ${(snap.thermal.fanMode == 'Quiet' || snap.thermal.fanMode == 'Eco') ? 'active' : ''}" onclick="setFanMode('Quiet')">Quiet</button>
-      </div>
     </div>
 
     <!-- Disk Storage Bento Card -->
@@ -1209,22 +991,6 @@ Plugin RSS Memory: ${snap.session.rssMb.toStringAsFixed(1)} MB
     }
 
     sendAction('ready');
-
-    function updateFanButtons(activeMode) {
-      document.querySelectorAll('.fan-btn').forEach(btn => {
-        const onclickAttr = btn.getAttribute('onclick') || '';
-        if (onclickAttr.includes("'" + activeMode + "'")) {
-          btn.classList.add('active');
-        } else {
-          btn.classList.remove('active');
-        }
-      });
-    }
-
-    function setFanMode(mode) {
-      updateFanButtons(mode);
-      sendAction('setFanMode', { mode: mode });
-    }
 
     function drawSparkline(canvasId, historyData, color) {
       const canvas = document.getElementById(canvasId);
@@ -1300,9 +1066,6 @@ Plugin RSS Memory: ${snap.session.rssMb.toStringAsFixed(1)} MB
       }
       if (data.thermal) {
         document.getElementById('fan-rpm').innerText = 'Speed: ' + (data.thermal.fanRpm > 0 ? data.thermal.fanRpm + ' RPM' : 'Auto');
-        if (data.thermal.fanMode) {
-          updateFanButtons(data.thermal.fanMode);
-        }
       }
       if (data.session) {
         document.getElementById('uptime-val').innerText = 'Uptime: ' + data.session.formattedUptime;
