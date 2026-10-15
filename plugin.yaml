@@ -1,165 +1,171 @@
-id: com.lumide.plugin.status-bar-stats
-name: 'Lumide Status Bar System Monitor'
-publisher: 'lumide'
+id: lumide_status_bar_stats
+name: 'System Stats'
 version: '1.0.0'
-description: 'Cross-platform real-time system metrics (CPU, RAM, Disk, Network, Battery, Thermal) in the Lumide IDE status bar.'
+description: 'CPU, memory, disk, network, battery and CPU temperature in the Lumide status bar.'
 entry_point: 'bin/main.dart'
 
 activation_events:
   - 'onStartup'
 
+# Lumide shows these so you can see what the plugin reads. Every source is
+# read-only; the plugin makes no network requests.
 permissions:
   - fileSystem:
+      # Linux
       - '/proc/stat'
       - '/proc/loadavg'
       - '/proc/meminfo'
       - '/proc/net/dev'
-      - '/sys/class/power_supply/**'
+      - '/proc/net/route'
+      - '/sys/class/hwmon/**'
       - '/sys/class/thermal/**'
+      - '/sys/class/power_supply/**'
   - shell:
-      - sysctl
-      - vm_stat
+      # Linux and macOS
       - df
-      - netstat
-      - pmset
-      - wmic
-      - top
+      - ps
+      # macOS
+      - vm_stat
+      - sysctl
       - route
+      - pmset
+      # macOS and Windows
+      - netstat
 
 configuration:
   - key: lumideStats.enableCpu
     type: boolean
     default: true
-    title: 'Enable CPU Metric'
-    description: 'Display CPU usage percentage in the status bar.'
+    title: 'Show CPU'
+    description: 'Show CPU usage in the status bar.'
   - key: lumideStats.enableRam
     type: boolean
     default: true
-    title: 'Enable RAM Metric'
-    description: 'Display RAM memory utilization in the status bar.'
+    title: 'Show Memory'
+    description: 'Show memory usage in the status bar.'
   - key: lumideStats.enableDisk
     type: boolean
     default: true
-    title: 'Enable Disk Metric'
-    description: 'Display free disk space in the status bar.'
+    title: 'Show Disk'
+    description: 'Show free space on the system disk in the status bar.'
   - key: lumideStats.enableNetwork
     type: boolean
     default: true
-    title: 'Enable Network Metric'
-    description: 'Display network download and upload rates in the status bar.'
+    title: 'Show Network'
+    description: 'Show download and upload rates in the status bar.'
   - key: lumideStats.enableBattery
     type: boolean
     default: true
-    title: 'Enable Battery Metric'
-    description: 'Display battery percentage and charging status in the status bar.'
+    title: 'Show Battery'
+    description: 'Show battery level in the status bar. Hidden on machines without a battery.'
   - key: lumideStats.enableThermal
     type: boolean
     default: true
-    title: 'Enable Thermal Sensor Metric'
-    description: 'Display CPU average temperature in the status bar.'
+    title: 'Show CPU Temperature'
+    description: 'Show CPU temperature in the status bar. Hidden when no sensor is available (always on Windows).'
   - key: lumideStats.enableUptime
     type: boolean
-    default: true
-    title: 'Enable Session Uptime Metric'
-    description: 'Display Lumide IDE session uptime in the status bar.'
+    default: false
+    title: 'Show Session Uptime'
+    description: 'Show how long the current Lumide session has been running.'
 
   - key: lumideStats.compactCpu
     type: boolean
     default: true
-    title: 'Compact CPU Mode'
-    description: 'Display CPU metric as a compact icon without text label.'
+    title: 'Compact CPU'
+    description: 'Show only the icon and value, without the "CPU" label.'
   - key: lumideStats.compactRam
     type: boolean
     default: true
-    title: 'Compact RAM Mode'
-    description: 'Display RAM metric as a compact icon without text label.'
+    title: 'Compact Memory'
+    description: 'Show only the icon and percentage. Turn off to show used and total memory.'
   - key: lumideStats.compactDisk
     type: boolean
     default: true
-    title: 'Compact Disk Mode'
-    description: 'Display Disk metric as a compact icon without text label.'
+    title: 'Compact Disk'
+    description: 'Show only the icon and free space, without the "Disk" label.'
   - key: lumideStats.compactNetwork
     type: boolean
     default: true
-    title: 'Compact Network Mode'
-    description: 'Display Network metric as a compact icon without text label.'
+    title: 'Compact Network'
+    description: 'Show only the icon and rates, without the "Net" label.'
   - key: lumideStats.compactBattery
     type: boolean
     default: true
-    title: 'Compact Battery Mode'
-    description: 'Display Battery metric as a compact icon without text label.'
+    title: 'Compact Battery'
+    description: 'Show only the icon and level, without the "Battery" label.'
   - key: lumideStats.compactThermal
     type: boolean
     default: true
-    title: 'Compact Thermal Mode'
-    description: 'Display Thermal metric as a compact icon without text label.'
+    title: 'Compact CPU Temperature'
+    description: 'Show only the icon and temperature, without the "CPU" label.'
   - key: lumideStats.compactUptime
     type: boolean
     default: true
-    title: 'Compact Uptime Mode'
-    description: 'Display Uptime metric as a compact icon without text label.'
+    title: 'Compact Uptime'
+    description: 'Show only the icon and duration, without the "Uptime" label.'
 
   - key: lumideStats.useFahrenheit
     type: boolean
     default: false
-    title: 'Use Fahrenheit Temperature'
-    description: 'Display temperature in Fahrenheit (°F) instead of Celsius (°C).'
-
+    title: 'Use Fahrenheit'
+    description: 'Show temperatures in °F instead of °C.'
   - key: lumideStats.updateIntervalSeconds
     type: integer
     default: 2
-    title: 'Polling Refresh Rate (Seconds)'
-    description: 'Polling interval in seconds for system metrics collection.'
-  - key: lumideStats.priorityBase
-    type: integer
-    default: 1000
-    title: 'Status Bar Priority Base'
-    description: 'Base priority used to group status bar items tightly together (default: 1000).'
+    title: 'Refresh Interval (Seconds)'
+    description: 'How often to refresh the metrics, from 1 to 60 seconds. Disk and battery refresh at most every 30 and 15 seconds.'
   - key: lumideStats.batterySaverMode
     type: boolean
     default: true
-    title: 'Battery Saver Mode'
-    description: 'Automatically slow down refresh rate when on battery power.'
+    title: 'Battery Saver'
+    description: 'Refresh every 10 seconds or slower while running on battery power.'
+  - key: lumideStats.priorityBase
+    type: integer
+    default: 1000
+    title: 'Status Bar Priority'
+    description: 'Priority of the first item. Change it to move the items relative to other status bar items.'
   - key: lumideStats.showTopBarIcon
     type: boolean
     default: true
-    title: 'Show Top Bar Main Icon'
-    description: 'Display System Stats Quick Menu icon in the top toolbar.'
+    title: 'Show Toolbar Icon'
+    description: 'Show a System Stats button in the top toolbar that opens the quick menu.'
 
 contributes:
   commands:
     - id: lumide-stats.showQuickMenu
-      title: 'Lumide Stats: Open Quick Menu'
+      title: 'System Stats: Open Quick Menu'
       category: 'System Stats'
     - id: lumide-stats.showDashboard
-      title: 'Lumide Stats: Show Detailed Dashboard'
+      title: 'System Stats: Show Dashboard'
+      category: 'System Stats'
+    - id: lumide-stats.showReport
+      title: 'System Stats: Show Report in Output'
+      category: 'System Stats'
+    - id: lumide-stats.refresh
+      title: 'System Stats: Refresh Now'
       category: 'System Stats'
     - id: lumide-stats.toggleCpu
-      title: 'Lumide Stats: Toggle CPU Metric'
+      title: 'System Stats: Toggle CPU'
       category: 'System Stats'
     - id: lumide-stats.toggleRam
-      title: 'Lumide Stats: Toggle RAM Metric'
+      title: 'System Stats: Toggle RAM'
       category: 'System Stats'
     - id: lumide-stats.toggleDisk
-      title: 'Lumide Stats: Toggle Disk Metric'
+      title: 'System Stats: Toggle Disk'
       category: 'System Stats'
     - id: lumide-stats.toggleNetwork
-      title: 'Lumide Stats: Toggle Network Metric'
+      title: 'System Stats: Toggle Network'
       category: 'System Stats'
     - id: lumide-stats.toggleBattery
-      title: 'Lumide Stats: Toggle Battery Metric'
+      title: 'System Stats: Toggle Battery'
       category: 'System Stats'
-    - id: lumide-stats.toggleSensors
-      title: 'Lumide Stats: Toggle Thermal Sensor Metric'
+    - id: lumide-stats.toggleThermal
+      title: 'System Stats: Toggle Temperature'
+      category: 'System Stats'
+    - id: lumide-stats.toggleUptime
+      title: 'System Stats: Toggle Uptime'
       category: 'System Stats'
     - id: lumide-stats.toggleTopBarIcon
-      title: 'Lumide Stats: Toggle Top Bar Main Icon'
+      title: 'System Stats: Toggle Toolbar Icon'
       category: 'System Stats'
-
-  keybindings:
-    - command: 'lumide-stats.showQuickMenu'
-      key: 'ctrl+alt+s'
-      mac: 'cmd+alt+s'
-    - command: 'lumide-stats.showDashboard'
-      key: 'ctrl+alt+d'
-      mac: 'cmd+alt+d'
