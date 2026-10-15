@@ -12,6 +12,16 @@ topics:
   - lumide-plugin
   - system-monitor
 
+screenshots:
+  - description: CPU, memory, disk, network and CPU temperature in the Lumide status bar.
+    path: doc/status_bar.png
+  - description: The quick menu with every option and the items to show.
+    path: doc/quick_menu.png
+  - description: CPU tooltip with load averages.
+    path: doc/cpu_tooltip.png
+  - description: CPU and memory items with compact mode off.
+    path: doc/labeled.png
+
 executables:
   lumide_status_bar_stats: main
 

@@ -20,9 +20,11 @@ System stats in the [Lumide IDE](https://lumide.dev) status bar: CPU, memory, di
 - **Dashboard**: live charts and the top processes by CPU and memory.
 - **Battery Saver**: refreshes every 10 seconds or slower while on battery power.
 
-![Quick menu](https://raw.githubusercontent.com/simonpham/lumide_status_bar_stats/develop/doc/quick_menu.png)
+Hover an item for details, such as the load averages behind the CPU value:
 
-![Dashboard](https://raw.githubusercontent.com/simonpham/lumide_status_bar_stats/develop/doc/dashboard.png)
+![CPU tooltip with load averages](https://raw.githubusercontent.com/simonpham/lumide_status_bar_stats/develop/doc/cpu_tooltip.png)
+
+![Quick menu](https://raw.githubusercontent.com/simonpham/lumide_status_bar_stats/develop/doc/quick_menu.png)
 
 ## Installation
 
@@ -66,6 +68,10 @@ Change these in the **Installed** tab of the Plugins pane (⚙ next to System St
 | `lumideStats.showTopBarIcon` | `true` | Show the System Stats button in the toolbar |
 
 Disk space is read at most every 30 seconds and the battery every 15 seconds. Hidden metrics aren't read, except the battery state, which Battery Saver needs.
+
+With compact mode off for CPU and memory, the items read like this:
+
+![CPU and memory with labels](https://raw.githubusercontent.com/simonpham/lumide_status_bar_stats/develop/doc/labeled.png)
 
 ## Platform support
 
