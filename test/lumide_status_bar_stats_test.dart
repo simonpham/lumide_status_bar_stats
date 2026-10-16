@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:lumide_api/lumide_api.dart';
 import 'package:lumide_status_bar_stats/lumide_status_bar_stats.dart';
@@ -6,6 +7,8 @@ import 'package:lumide_status_bar_stats/src/command_runner.dart';
 import 'package:lumide_status_bar_stats/src/dashboard.dart';
 import 'package:lumide_status_bar_stats/src/menu_handler.dart';
 import 'package:lumide_status_bar_stats/src/native/macos.dart';
+import 'package:lumide_status_bar_stats/src/native/posix.dart';
+import 'package:lumide_status_bar_stats/src/native/windows.dart';
 import 'package:lumide_status_bar_stats/src/parsers.dart';
 import 'package:lumide_status_bar_stats/src/status_bar_manager.dart';
 import 'package:test/test.dart';
@@ -607,6 +610,134 @@ garbage
     });
   });
 
+  group('native readers', () {
+    test('diskStatsFromBlocks reports like df', () {
+      final disk = diskStatsFromBlocks(
+        volume: '/',
+        blockSize: 4096,
+        blocks: 1000,
+        freeBlocks: 300,
+        availableBlocks: 250,
+      )!;
+      expect(disk.volume, '/');
+      expect(disk.totalBytes, 1000 * 4096);
+      expect(disk.usedBytes, 700 * 4096);
+      expect(disk.freeBytes, 250 * 4096);
+      // Implausible values fall back to df.
+      for (final (size, blocks, free, available) in [
+        (0, 1000, 300, 250),
+        (4096, 0, 0, 0),
+        (4096, 1000, 1001, 250),
+        (4096, 1000, 300, -1),
+      ]) {
+        expect(
+          diskStatsFromBlocks(
+            volume: '/',
+            blockSize: size,
+            blocks: blocks,
+            freeBlocks: free,
+            availableBlocks: available,
+          ),
+          isNull,
+        );
+      }
+    });
+
+    test('statvfs matches df -kP /', () async {
+      final native = PosixDisk.instance!.read('/')!;
+      final df = parseDf(
+        (await Process.run('df', ['-kP', '/'])).stdout as String,
+      )!;
+      expect(native.volume, df.volume);
+      expect(native.totalBytes, closeTo(df.totalBytes, 1024));
+      // Other processes may write in between.
+      expect(native.usedBytes, closeTo(df.usedBytes, 64 << 20));
+      expect(native.freeBytes, closeTo(df.freeBytes, 64 << 20));
+    }, skip: Platform.isLinux || Platform.isMacOS ? false : 'POSIX only');
+
+    test('macUsedMemoryBytes counts app, wired and compressed pages', () {
+      expect(
+        macUsedMemoryBytes(
+          pageSize: 16384,
+          wired: 100,
+          compressed: 50,
+          anonymous: 400,
+          purgeable: 30,
+          active: 999,
+        ),
+        (370 + 100 + 50) * 16384,
+      );
+      expect(
+        macUsedMemoryBytes(pageSize: 4096, wired: 1, compressed: 0, active: 9),
+        10 * 4096,
+      );
+    });
+
+    test('parseIfList2 finds the interface counters', () {
+      // RTM_IFINFO2 messages are 160 bytes; other messages are skipped.
+      final data = ByteData(160 * 3 + 20);
+      var offset = 0;
+      void message(
+        int type,
+        int length, {
+        int index = 0,
+        int rx = 0,
+        int tx = 0,
+      }) {
+        data
+          ..setUint16(offset, length, Endian.little)
+          ..setUint8(offset + 2, 7)
+          ..setUint8(offset + 3, type)
+          ..setUint16(offset + 12, index, Endian.little);
+        if (length >= 112) {
+          data
+            ..setUint64(offset + 96, rx, Endian.little)
+            ..setUint64(offset + 104, tx, Endian.little);
+        }
+        offset += length;
+      }
+
+      message(0x12, 160, index: 1, rx: 11, tx: 12); // lo0
+      message(0x0e, 20, index: 4); // RTM_NEWADDR for en0
+      message(0x12, 160, index: 4, rx: 5000000000, tx: 6000000000); // en0
+      message(0x12, 160, index: 5, rx: 7, tx: 8);
+
+      expect(
+        parseIfList2(data, offset, 4),
+        const NetCounters(5000000000, 6000000000),
+      );
+      expect(parseIfList2(data, offset, 1), const NetCounters(11, 12));
+      expect(parseIfList2(data, offset, 9), isNull);
+      // A truncated buffer ends the walk instead of reading past it.
+      expect(parseIfList2(data, 160 + 20 + 100, 4), isNull);
+    });
+
+    test('parseIfTable2 sums connected hardware adapters only', () {
+      final rows = [
+        // (flags, type, operStatus, in, out)
+        (0x01, 6, 1, 1000, 100), // Ethernet
+        (0x01, 71, 1, 2000, 200), // Wi-Fi
+        (0x03, 71, 1, 2000, 200), // Wi-Fi filter driver row (duplicate)
+        (0x00, 24, 1, 9999, 9999), // loopback
+        (0x00, 53, 1, 500, 50), // VPN adapter
+        (0x01, 6, 2, 7777, 7777), // disconnected adapter
+      ];
+      final data = ByteData(8 + rows.length * ifRow2Size)
+        ..setUint32(0, rows.length, Endian.little);
+      for (final (i, (flags, type, status, rx, tx)) in rows.indexed) {
+        final row = 8 + i * ifRow2Size;
+        data
+          ..setUint32(row + 1128, type, Endian.little)
+          ..setUint8(row + 1152, flags)
+          ..setUint32(row + 1156, status, Endian.little)
+          ..setUint64(row + 1208, rx, Endian.little)
+          ..setUint64(row + 1280, tx, Endian.little);
+      }
+      expect(parseIfTable2(data, rows.length), const NetCounters(3000, 300));
+      expect(parseIfTable2(data, 0), isNull);
+    });
+  });
+
   group('CommandRunner', () {
     final posix = Platform.isLinux || Platform.isMacOS
         ? false
@@ -666,6 +797,15 @@ garbage
       }
       expect(snapshot.toFormattedJson(), contains('"session"'));
     });
+
+    test('starts no processes on Linux', () async {
+      final collector = SystemStatsCollector(diskInterval: Duration.zero);
+      for (var i = 0; i < 3; i++) {
+        await collector.collect();
+      }
+      expect(collector.processesStarted, 0);
+      collector.dispose();
+    }, skip: Platform.isLinux ? false : 'Linux only');
 
     test('only reads requested metrics', () async {
       final snapshot = await SystemStatsCollector().collect(

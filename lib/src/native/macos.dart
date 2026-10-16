@@ -1,6 +1,7 @@
 /// macOS readings through system libraries, without spawning processes:
-/// CPU ticks from Mach, load averages from libc, and temperatures and fan
-/// speeds from the System Management Controller (SMC, read-only).
+/// CPU ticks and memory from Mach, load averages, swap and network counters
+/// from libc, and temperatures and fan speeds from the System Management
+/// Controller (SMC, read-only).
 library;
 
 import 'dart:ffi';
@@ -9,6 +10,7 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
+import '../models/system_stats.dart';
 import '../parsers.dart';
 
 typedef _MachHostSelfC = Uint32 Function();
@@ -19,10 +21,89 @@ typedef _HostStatistics =
     int Function(int, int, Pointer<Int32>, Pointer<Uint32>);
 typedef _GetLoadAvgC = Int32 Function(Pointer<Double>, Int32);
 typedef _GetLoadAvg = int Function(Pointer<Double>, int);
+typedef _HostPageSizeC = Int32 Function(Uint32, Pointer<UintPtr>);
+typedef _HostPageSize = int Function(int, Pointer<UintPtr>);
+typedef _SysctlByNameC =
+    Int32 Function(
+      Pointer<Utf8>,
+      Pointer<Void>,
+      Pointer<Size>,
+      Pointer<Void>,
+      Size,
+    );
+typedef _SysctlByName =
+    int Function(
+      Pointer<Utf8>,
+      Pointer<Void>,
+      Pointer<Size>,
+      Pointer<Void>,
+      int,
+    );
+typedef _SysctlC =
+    Int32 Function(
+      Pointer<Int32>,
+      Uint32,
+      Pointer<Void>,
+      Pointer<Size>,
+      Pointer<Void>,
+      Size,
+    );
+typedef _Sysctl =
+    int Function(
+      Pointer<Int32>,
+      int,
+      Pointer<Void>,
+      Pointer<Size>,
+      Pointer<Void>,
+      int,
+    );
+typedef _IfNameToIndexC = Uint32 Function(Pointer<Utf8>);
+typedef _IfNameToIndex = int Function(Pointer<Utf8>);
 
 const _hostCpuLoadInfo = 3; // HOST_CPU_LOAD_INFO
 const _cpuStateMax = 4; // user, system, idle, nice
 const _cpuStateIdle = 2;
+
+const _hostVmInfo64 = 4; // HOST_VM_INFO64
+const _hostVmInfo64Count = 38; // sizeof(vm_statistics64_data_t) / 4
+
+/// Indexes, in 32-bit words, of the `vm_statistics64` fields read.
+const _vmActiveCount = 1; // active_count
+const _vmWireCount = 3; // wire_count
+const _vmPurgeableCount = 22; // purgeable_count (offset 88)
+const _vmCompressorPageCount = 32; // compressor_page_count (offset 128)
+const _vmInternalPageCount = 35; // internal_page_count (offset 140)
+
+// sysctl {CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0}
+const _ifList2Mib = [4, 17, 0, 0, 6, 0];
+const _rtmIfInfo2 = 0x12; // RTM_IFINFO2
+
+/// Finds the byte counters of the interface with index [interfaceIndex] in
+/// the output of the `NET_RT_IFLIST2` sysctl: a sequence of messages that
+/// start with `{u16 msglen, u8 version, u8 type}`.
+///
+/// `RTM_IFINFO2` messages are `struct if_msghdr2`: `ifm_index` (u16) is at
+/// offset 12 and `ifm_data` (`struct if_data64`) at 32, whose 64-bit
+/// `ifi_ibytes` and `ifi_obytes` are at 64 and 72. These are the counters
+/// `netstat -b` prints.
+NetCounters? parseIfList2(ByteData data, int length, int interfaceIndex) {
+  var offset = 0;
+  while (offset + 4 <= length) {
+    final messageLength = data.getUint16(offset, Endian.little);
+    if (messageLength < 4 || offset + messageLength > length) break;
+    final type = data.getUint8(offset + 3);
+    if (type == _rtmIfInfo2 &&
+        messageLength >= 112 &&
+        data.getUint16(offset + 12, Endian.little) == interfaceIndex) {
+      return NetCounters(
+        data.getUint64(offset + 32 + 64, Endian.little),
+        data.getUint64(offset + 32 + 72, Endian.little),
+      );
+    }
+    offset += messageLength;
+  }
+  return null;
+}
 
 /// CPU ticks and load averages from libSystem.
 class MacSystem {
@@ -42,6 +123,28 @@ class MacSystem {
       _hostStatistics = null;
       _getLoadAvg = null;
     }
+    // Memory and network readers are optional: the collector falls back to
+    // vm_stat and netstat when they are missing.
+    try {
+      final lib = DynamicLibrary.process();
+      _hostStatistics64 = lib.lookupFunction<_HostStatisticsC, _HostStatistics>(
+        'host_statistics64',
+      );
+      _hostPageSize = lib.lookupFunction<_HostPageSizeC, _HostPageSize>(
+        'host_page_size',
+      );
+      _sysctlByName = lib.lookupFunction<_SysctlByNameC, _SysctlByName>(
+        'sysctlbyname',
+      );
+      _sysctl = lib.lookupFunction<_SysctlC, _Sysctl>('sysctl');
+      _ifNameToIndex = lib.lookupFunction<_IfNameToIndexC, _IfNameToIndex>(
+        'if_nametoindex',
+      );
+    } catch (_) {
+      _hostStatistics64 = null;
+      _sysctlByName = null;
+      _sysctl = null;
+    }
   }
 
   static MacSystem? _instance;
@@ -55,6 +158,19 @@ class MacSystem {
   int _host = 0;
   _HostStatistics? _hostStatistics;
   _GetLoadAvg? _getLoadAvg;
+  _HostStatistics? _hostStatistics64;
+  _HostPageSize? _hostPageSize;
+  _SysctlByName? _sysctlByName;
+  _Sysctl? _sysctl;
+  _IfNameToIndex? _ifNameToIndex;
+
+  int? _totalMemory;
+  int? _pageSize;
+  final _interfaceIndexes = <String, int>{};
+
+  /// Reused across reads of the interface list; grown when too small.
+  Pointer<Uint8> _ifListBuffer = nullptr;
+  int _ifListCapacity = 0;
 
   /// Cumulative CPU ticks of all cores.
   CpuTimes? cpuTimes() {
@@ -78,6 +194,148 @@ class MacSystem {
       calloc.free(info);
       calloc.free(count);
     }
+  }
+
+  /// Reads a 64-bit sysctl value such as `hw.memsize` into [buffer].
+  bool _sysctlBytes(String name, Pointer<Uint8> buffer, int size) {
+    final sysctlByName = _sysctlByName;
+    if (sysctlByName == null) return false;
+    final nativeName = name.toNativeUtf8();
+    final length = calloc<Size>()..value = size;
+    try {
+      return sysctlByName(nativeName, buffer.cast(), length, nullptr, 0) == 0 &&
+          length.value == size;
+    } finally {
+      calloc.free(nativeName);
+      calloc.free(length);
+    }
+  }
+
+  /// Physical memory, used memory (as Activity Monitor counts it) and swap.
+  RamStats? memory() {
+    final hostStatistics64 = _hostStatistics64;
+    if (hostStatistics64 == null || _host == 0) return null;
+    // xsw_usage (32 bytes) is the largest value read.
+    final buffer = calloc<Uint8>(_hostVmInfo64Count * 4);
+    final count = calloc<Uint32>();
+    try {
+      final total = _totalMemory ??= _sysctlBytes('hw.memsize', buffer, 8)
+          ? buffer.cast<Uint64>().value
+          : null;
+      final pageSize = _pageSize ??= _readPageSize();
+      if (total == null || total <= 0 || pageSize == null) return null;
+
+      int? swapUsed;
+      // struct xsw_usage: u64 total, avail, used; u32 pagesize; bool encrypted.
+      if (_sysctlBytes('vm.swapusage', buffer, 32)) {
+        swapUsed = buffer.cast<Uint64>()[2];
+      }
+
+      count.value = _hostVmInfo64Count;
+      final info = buffer.cast<Uint32>();
+      if (hostStatistics64(_host, _hostVmInfo64, info.cast(), count) != 0) {
+        return null;
+      }
+      final used = macUsedMemoryBytes(
+        pageSize: pageSize,
+        wired: info[_vmWireCount],
+        compressed: info[_vmCompressorPageCount],
+        anonymous: info[_vmInternalPageCount],
+        purgeable: info[_vmPurgeableCount],
+        active: info[_vmActiveCount],
+      );
+      return RamStats(
+        totalBytes: total,
+        usedBytes: used.clamp(0, total),
+        swapUsedBytes: swapUsed,
+      );
+    } finally {
+      calloc.free(buffer);
+      calloc.free(count);
+    }
+  }
+
+  int? _readPageSize() {
+    final hostPageSize = _hostPageSize;
+    if (hostPageSize == null) return null;
+    final size = calloc<UintPtr>();
+    try {
+      if (hostPageSize(_host, size) != 0 || size.value <= 0) return null;
+      return size.value;
+    } finally {
+      calloc.free(size);
+    }
+  }
+
+  /// Total bytes received and sent by the interface named [name], e.g.
+  /// `en0`, read from the same counters as `netstat -b`.
+  NetCounters? interfaceCounters(String name) {
+    final sysctl = _sysctl;
+    final ifNameToIndex = _ifNameToIndex;
+    if (sysctl == null || ifNameToIndex == null) return null;
+    var index = _interfaceIndexes[name];
+    if (index == null) {
+      final nativeName = name.toNativeUtf8();
+      try {
+        index = ifNameToIndex(nativeName);
+      } finally {
+        calloc.free(nativeName);
+      }
+      if (index == 0) return null;
+      _interfaceIndexes[name] = index;
+    }
+
+    final mib = calloc<Int32>(_ifList2Mib.length);
+    final length = calloc<Size>();
+    try {
+      for (var i = 0; i < _ifList2Mib.length; i++) {
+        mib[i] = _ifList2Mib[i];
+      }
+      // The list can grow between the size query and the read; retry once.
+      for (var attempt = 0; attempt < 2; attempt++) {
+        length.value = 0;
+        if (sysctl(mib, _ifList2Mib.length, nullptr, length, nullptr, 0) != 0) {
+          return null;
+        }
+        final needed = length.value + 1024;
+        if (needed > _ifListCapacity) {
+          if (_ifListBuffer != nullptr) calloc.free(_ifListBuffer);
+          _ifListBuffer = calloc<Uint8>(needed);
+          _ifListCapacity = needed;
+        }
+        length.value = _ifListCapacity;
+        if (sysctl(
+              mib,
+              _ifList2Mib.length,
+              _ifListBuffer.cast(),
+              length,
+              nullptr,
+              0,
+            ) ==
+            0) {
+          final bytes = _ifListBuffer.asTypedList(length.value);
+          final counters = parseIfList2(
+            ByteData.sublistView(bytes),
+            length.value,
+            index,
+          );
+          // The index may belong to another interface after a replug.
+          if (counters == null) _interfaceIndexes.remove(name);
+          return counters;
+        }
+      }
+      return null;
+    } finally {
+      calloc.free(mib);
+      calloc.free(length);
+    }
+  }
+
+  /// Frees the buffers kept between reads.
+  void dispose() {
+    if (_ifListBuffer != nullptr) calloc.free(_ifListBuffer);
+    _ifListBuffer = nullptr;
+    _ifListCapacity = 0;
   }
 
   /// 1, 5 and 15 minute load averages.

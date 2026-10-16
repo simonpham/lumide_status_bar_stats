@@ -108,12 +108,29 @@ int? parseVmStatUsedBytes(String output) {
     if (match != null) pages[match.group(1)!] = int.parse(match.group(2)!);
   }
   final wired = pages['Pages wired down'];
-  final compressed = pages['Pages occupied by compressor'] ?? 0;
   if (wired == null) return null;
-  final anonymous = pages['Anonymous pages'];
-  final appPages = anonymous != null
-      ? anonymous - (pages['Pages purgeable'] ?? 0)
-      : pages['Pages active'] ?? 0;
+  return macUsedMemoryBytes(
+    pageSize: pageSize,
+    wired: wired,
+    compressed: pages['Pages occupied by compressor'] ?? 0,
+    anonymous: pages['Anonymous pages'],
+    purgeable: pages['Pages purgeable'] ?? 0,
+    active: pages['Pages active'] ?? 0,
+  );
+}
+
+/// Used memory the way Activity Monitor counts it: app memory (anonymous
+/// minus purgeable pages) + wired + compressed. Falls back to active pages
+/// when the anonymous page count is unknown.
+int macUsedMemoryBytes({
+  required int pageSize,
+  required int wired,
+  required int compressed,
+  int? anonymous,
+  int purgeable = 0,
+  int active = 0,
+}) {
+  final appPages = anonymous != null ? anonymous - purgeable : active;
   return (appPages.clamp(0, 1 << 62) + wired + compressed) * pageSize;
 }
 

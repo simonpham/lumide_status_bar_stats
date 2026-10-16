@@ -21,15 +21,15 @@ permissions:
       - '/sys/class/thermal/**'
       - '/sys/class/power_supply/**'
   - shell:
-      # Linux and macOS
-      - df
+      # Top processes while the dashboard is open (Linux and macOS)
       - ps
-      # macOS
-      - vm_stat
-      - sysctl
+      # macOS: default network interface and battery
       - route
       - pmset
-      # macOS and Windows
+      # Only if the system libraries can't be read
+      - df
+      - vm_stat
+      - sysctl
       - netstat
 
 configuration:

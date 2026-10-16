@@ -4,6 +4,7 @@ import 'dart:io';
 import 'command_runner.dart';
 import 'models/system_stats.dart';
 import 'native/macos.dart';
+import 'native/posix.dart';
 import 'native/windows.dart';
 import 'parsers.dart';
 
@@ -13,10 +14,13 @@ enum Metric { cpu, ram, disk, network, battery, thermal }
 /// Reads system metrics on Linux, macOS and Windows.
 ///
 /// Sources by platform:
-/// - Linux: `/proc`, `/sys/class/{hwmon,thermal,power_supply}`, and `df`.
-/// - macOS: Mach and SMC through FFI, `vm_stat`, `sysctl`, `df`, `route`,
-///   `netstat`, and `pmset`.
-/// - Windows: kernel32 through FFI, and `netstat -e`.
+/// - Linux: `/proc`, `/sys/class/{hwmon,thermal,power_supply}`, and
+///   `statvfs`. No processes are started.
+/// - macOS: Mach, libc (`statfs`, `sysctl`) and SMC through FFI, `route`
+///   (every 30 seconds) and `pmset` (with battery). `vm_stat`, `sysctl`,
+///   `df` and `netstat` are only run if the FFI readers fail.
+/// - Windows: kernel32 and iphlpapi through FFI. `netstat -e` is only run if
+///   the FFI reader fails.
 ///
 /// Top processes (dashboard only) come from `ps` on Linux and macOS.
 ///
@@ -50,6 +54,12 @@ class SystemStatsCollector {
   bool _linuxSensorSearched = false;
   ({String path, String description})? _linuxSensor;
 
+  /// Battery directories under `/sys/class/power_supply`, re-listed every
+  /// [_linuxBatteryScanInterval].
+  List<String>? _linuxBatteryPaths;
+  DateTime? _linuxBatteryScanTime;
+  static const _linuxBatteryScanInterval = Duration(minutes: 5);
+
   Future<SystemStatsSnapshot>? _inFlight;
 
   final _commands = CommandRunner();
@@ -61,6 +71,7 @@ class SystemStatsCollector {
   /// Later [collect] calls return only what can be read without them.
   void dispose() {
     _commands.dispose();
+    MacSystem.instance?.dispose();
   }
 
   /// Reads [metrics] (all by default). Metrics that aren't requested or
@@ -131,7 +142,19 @@ class SystemStatsCollector {
 
   // --- Processes -------------------------------------------------------------
 
-  Future<String?> _readFile(String path) async {
+  /// Reads a small `/proc` or `/sys` file. These are generated in memory by
+  /// the kernel, so a synchronous read is cheaper than an asynchronous one.
+  String? _readFile(String path) {
+    try {
+      return File(path).readAsStringSync();
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  /// Reads a file without blocking: used for the one-time sensor scan,
+  /// where some drivers (e.g. disk temperatures) can be slow to answer.
+  Future<String?> _readFileAsync(String path) async {
     try {
       return await File(path).readAsString();
     } on FileSystemException {
@@ -151,7 +174,7 @@ class SystemStatsCollector {
 
   Future<CpuTimes?> _readCpuTimes() async {
     if (Platform.isLinux) {
-      final content = await _readFile('/proc/stat');
+      final content = _readFile('/proc/stat');
       return content == null ? null : parseProcStat(content);
     }
     if (Platform.isMacOS) return MacSystem.instance?.cpuTimes();
@@ -182,7 +205,7 @@ class SystemStatsCollector {
 
   Future<LoadAverage?> _readLoadAverage() async {
     if (Platform.isLinux) {
-      final content = await _readFile('/proc/loadavg');
+      final content = _readFile('/proc/loadavg');
       return content == null ? null : parseLoadAverage(content);
     }
     if (Platform.isMacOS) {
@@ -198,11 +221,13 @@ class SystemStatsCollector {
 
   Future<RamStats?> _readRam() async {
     if (Platform.isLinux) {
-      final content = await _readFile('/proc/meminfo');
+      final content = _readFile('/proc/meminfo');
       return content == null ? null : parseMeminfo(content);
     }
     if (Platform.isWindows) return WindowsSystem.instance?.memory();
     if (Platform.isMacOS) {
+      final native = MacSystem.instance?.memory();
+      if (native != null) return native;
       final total = _macTotalMemory ??= int.tryParse(
         (await _commands.run('sysctl', ['-n', 'hw.memsize']))?.trim() ?? '',
       );
@@ -241,6 +266,8 @@ class SystemStatsCollector {
       final drive = Platform.environment['SystemDrive'] ?? 'C:';
       return WindowsSystem.instance?.disk('$drive\\');
     }
+    final native = PosixDisk.instance?.read('/');
+    if (native != null) return native;
     final output = await _commands.run('df', ['-kP', '/']);
     return output == null ? null : parseDf(output);
   }
@@ -280,15 +307,12 @@ class SystemStatsCollector {
   Future<({NetCounters counters, String? interface})?>
   _readNetCounters() async {
     if (Platform.isLinux) {
-      final results = await Future.wait([
-        _readFile('/proc/net/dev'),
-        _readFile('/proc/net/route'),
-      ]);
-      final dev = results[0];
+      final dev = _readFile('/proc/net/dev');
       if (dev == null) return null;
-      final defaults = results[1] == null
+      final route = _readFile('/proc/net/route');
+      final defaults = route == null
           ? <String>{}
-          : parseProcNetRouteDefaults(results[1]!);
+          : parseProcNetRouteDefaults(route);
       final counters =
           (defaults.isEmpty
               ? null
@@ -306,15 +330,18 @@ class SystemStatsCollector {
     if (Platform.isMacOS) {
       final interface = await _macDefaultInterface();
       if (interface == null) return null;
-      final output = await _commands.run('netstat', [
-        '-b',
-        '-n',
-        '-I',
-        interface,
-      ]);
-      final counters = output == null
-          ? null
-          : parseNetstatInterface(output, interface);
+      var counters = MacSystem.instance?.interfaceCounters(interface);
+      if (counters == null) {
+        final output = await _commands.run('netstat', [
+          '-b',
+          '-n',
+          '-I',
+          interface,
+        ]);
+        counters = output == null
+            ? null
+            : parseNetstatInterface(output, interface);
+      }
       if (counters == null) {
         _macInterface = null; // Look the route up again next time.
         return null;
@@ -323,8 +350,11 @@ class SystemStatsCollector {
     }
 
     if (Platform.isWindows) {
-      final output = await _commands.run('netstat', ['-e']);
-      final counters = output == null ? null : parseWindowsNetstatE(output);
+      var counters = WindowsSystem.instance?.networkCounters();
+      if (counters == null) {
+        final output = await _commands.run('netstat', ['-e']);
+        counters = output == null ? null : parseWindowsNetstatE(output);
+      }
       return counters == null ? null : (counters: counters, interface: null);
     }
     return null;
@@ -363,6 +393,7 @@ class SystemStatsCollector {
   void invalidateCaches() {
     _diskCache = null;
     _batteryCache = null;
+    _linuxBatteryPaths = null;
   }
 
   Future<BatteryStats?> _readBattery() async {
@@ -375,38 +406,52 @@ class SystemStatsCollector {
     return null;
   }
 
+  /// System batteries under `/sys/class/power_supply`. Peripheral batteries
+  /// (mice, keyboards) reported by HID drivers are left out.
+  List<String> _linuxBatteries() {
+    final scanTime = _linuxBatteryScanTime;
+    final cached = _linuxBatteryPaths;
+    if (cached != null &&
+        scanTime != null &&
+        DateTime.now().difference(scanTime) < _linuxBatteryScanInterval) {
+      return cached;
+    }
+    final paths = <String>[];
+    try {
+      for (final entity in Directory('/sys/class/power_supply').listSync()) {
+        final path = entity.path;
+        if (_readFile('$path/type')?.trim() != 'Battery') continue;
+        if (_readFile('$path/scope')?.trim() == 'Device') continue;
+        paths.add(path);
+      }
+    } on FileSystemException {
+      // No power_supply class: no battery.
+    }
+    paths.sort();
+    _linuxBatteryScanTime = DateTime.now();
+    return _linuxBatteryPaths = paths;
+  }
+
   Future<BatteryStats?> _readLinuxBattery() async {
-    final dir = Directory('/sys/class/power_supply');
-    if (!await dir.exists()) return null;
-    await for (final entity in dir.list()) {
-      final path = entity.path;
-      final type = (await _readFile('$path/type'))?.trim();
-      if (type != 'Battery') continue;
-      // Skip peripheral batteries (mice, keyboards) reported by HID drivers.
-      final scope = (await _readFile('$path/scope'))?.trim();
-      if (scope == 'Device') continue;
-      final capacity = int.tryParse(
-        (await _readFile('$path/capacity'))?.trim() ?? '',
-      );
+    for (final path in _linuxBatteries()) {
+      final capacity = int.tryParse(_readFile('$path/capacity')?.trim() ?? '');
       if (capacity == null) continue;
-      final state = parseSysfsBatteryStatus(
-        await _readFile('$path/status') ?? '',
-      );
-      Future<int?> readInt(String name) async =>
-          int.tryParse((await _readFile('$path/$name'))?.trim() ?? '');
-      final energyNow = await readInt('energy_now');
+      final state = parseSysfsBatteryStatus(_readFile('$path/status') ?? '');
+      int? readInt(String name) =>
+          int.tryParse(_readFile('$path/$name')?.trim() ?? '');
+      final energyNow = readInt('energy_now');
       final minutes = energyNow != null
           ? estimateBatteryMinutes(
               state: state,
               now: energyNow,
-              full: await readInt('energy_full'),
-              rate: (await readInt('power_now'))?.abs(),
+              full: readInt('energy_full'),
+              rate: readInt('power_now')?.abs(),
             )
           : estimateBatteryMinutes(
               state: state,
-              now: await readInt('charge_now'),
-              full: await readInt('charge_full'),
-              rate: (await readInt('current_now'))?.abs(),
+              now: readInt('charge_now'),
+              full: readInt('charge_full'),
+              rate: readInt('current_now')?.abs(),
             );
       return BatteryStats(
         levelPercent: capacity.clamp(0, 100),
@@ -443,7 +488,7 @@ class SystemStatsCollector {
     }
     final sensor = _linuxSensor;
     if (sensor == null) return null;
-    final raw = await _readFile(sensor.path);
+    final raw = _readFile(sensor.path);
     final celsius = raw == null ? null : parseMilliCelsius(raw);
     if (celsius == null) return null;
     return ThermalStats(
@@ -462,25 +507,26 @@ class SystemStatsCollector {
         final name = entity.path.split('/').last;
         if (!name.startsWith(prefix)) continue;
         if (prefix == 'hwmon') {
-          final chip = (await _readFile('${entity.path}/name'))?.trim();
+          final chip = (await _readFileAsync('${entity.path}/name'))?.trim();
           if (chip == null) continue;
           for (var i = 1; i <= 16; i++) {
             final path = '${entity.path}/temp${i}_input';
-            final raw = await _readFile(path);
+            final raw = await _readFileAsync(path);
             if (raw == null) continue;
             final celsius = parseMilliCelsius(raw);
             if (celsius == null) continue;
-            final label = (await _readFile('${entity.path}/temp${i}_label'))
-                ?.trim();
+            final label = (await _readFileAsync(
+              '${entity.path}/temp${i}_label',
+            ))?.trim();
             candidates.add((
               path: path,
               sensor: LinuxTempSensor(chip, label, celsius),
             ));
           }
         } else {
-          final type = (await _readFile('${entity.path}/type'))?.trim();
+          final type = (await _readFileAsync('${entity.path}/type'))?.trim();
           final path = '${entity.path}/temp';
-          final raw = await _readFile(path);
+          final raw = await _readFileAsync(path);
           final celsius = raw == null ? null : parseMilliCelsius(raw);
           if (type == null || celsius == null) continue;
           candidates.add((

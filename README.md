@@ -78,24 +78,24 @@ With compact mode off for CPU and memory, the items read like this:
 | Metric | Linux | macOS | Windows |
 | --- | --- | --- | --- |
 | CPU | `/proc/stat` | Mach host statistics | `GetSystemTimes` |
-| Memory | `/proc/meminfo` | `vm_stat`, `sysctl` | `GlobalMemoryStatusEx` |
-| Disk | `df` | `df` | `GetDiskFreeSpaceExW` |
-| Network | `/proc/net/dev`, `/proc/net/route` | `route`, `netstat` | `netstat -e` |
+| Memory | `/proc/meminfo` | Mach VM statistics, `sysctl` | `GlobalMemoryStatusEx` |
+| Disk | `statvfs` | `statfs` | `GetDiskFreeSpaceExW` |
+| Network | `/proc/net/dev`, `/proc/net/route` | `route`, interface counters (`sysctl`) | `GetIfTable2` |
 | Battery | `/sys/class/power_supply` | `pmset` | `GetSystemPowerStatus` |
 | CPU temperature | `/sys/class/hwmon`, `/sys/class/thermal` | SMC (read-only) | Not available |
 | Top processes | `ps` | `ps` | Not available |
 
 - **Windows**: CPU temperature is only exposed to administrators, so the item stays hidden.
 - **Linux**: Lumide doesn't support webviews on Linux yet, so **Show Dashboard** writes the report to the Output pane instead.
-- **Network** counts the interface that holds the default route. With a VPN, that is usually the VPN interface.
+- **Network** counts the interface that holds the default route on Linux and macOS. With a VPN, that is usually the VPN interface. On Windows it counts the connected network adapters.
 
 ## Permissions
 
 The plugin only reads system information. It doesn't write files, change system settings, or make network requests. `plugin.yaml` lists what it reads:
 
 - **Files (Linux)**: `/proc/stat`, `/proc/loadavg`, `/proc/meminfo`, `/proc/net/dev`, `/proc/net/route`, and `/sys/class/hwmon`, `/sys/class/thermal`, `/sys/class/power_supply`.
-- **Commands**: `df` and `ps` (Linux and macOS); `vm_stat`, `sysctl`, `route` and `pmset` (macOS); `netstat` (macOS and Windows). `ps` only runs while the dashboard is open.
-- **System libraries**: CPU usage, load averages and the SMC on macOS, and kernel32 on Windows, are read through Dart FFI.
+- **Commands**: `ps` (Linux and macOS) only runs while the dashboard is open. On macOS, `route` runs every 30 seconds to find the default interface, and `pmset` every 15 seconds when the battery item is shown. `df`, `vm_stat`, `sysctl` and `netstat` are only run if reading the system libraries fails. On Linux, the status bar items start no processes.
+- **System libraries**: read through Dart FFI: libc on Linux and macOS, Mach and the SMC on macOS, and kernel32 and iphlpapi on Windows.
 
 ## License
 
