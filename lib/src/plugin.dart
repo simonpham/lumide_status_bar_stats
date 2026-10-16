@@ -26,11 +26,14 @@ class LumideStatusBarStatsPlugin extends LumidePlugin {
   SystemStatsSnapshot? _latest;
   bool? _toolbarShown;
   bool _active = false;
+  bool _deactivated = false;
 
   @override
   Future<void> onActivate(LumideContext context) async {
     _context = context;
     _config = await LumideStatsConfig.load(context.workspace);
+    // Lumide may shut the plugin down while settings are loading.
+    if (_deactivated) return;
     _statusBar = StatusBarManager(context.statusBar, _config);
     _menu = MenuHandler(
       context: context,
@@ -63,9 +66,17 @@ class LumideStatusBarStatsPlugin extends LumidePlugin {
 
   @override
   Future<void> onDeactivate() async {
+    // lumide_api before 1.8 calls this twice: on `shutdown` and again when
+    // the connection closes.
+    if (_deactivated) return;
+    _deactivated = true;
+    final wasActive = _active;
     _active = false;
     _timer?.cancel();
     _timer = null;
+    // Kill commands that are still running so none outlive the plugin.
+    _collector.dispose();
+    if (!wasActive) return;
     try {
       await _menu.dispose();
       await _statusBar.disposeAll();
@@ -101,7 +112,7 @@ class LumideStatusBarStatsPlugin extends LumidePlugin {
 
   Future<void> _syncToolbar() async {
     final show = _config.showTopBarIcon;
-    if (_toolbarShown == show) return;
+    if (!_active || _toolbarShown == show) return;
     try {
       if (show) {
         await _context.toolbar.registerItem(

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:lumide_api/lumide_api.dart';
 import 'package:lumide_status_bar_stats/lumide_status_bar_stats.dart';
+import 'package:lumide_status_bar_stats/src/command_runner.dart';
 import 'package:lumide_status_bar_stats/src/dashboard.dart';
 import 'package:lumide_status_bar_stats/src/menu_handler.dart';
 import 'package:lumide_status_bar_stats/src/native/macos.dart';
@@ -604,6 +605,46 @@ garbage
       expect(report, contains('Battery: none'));
       expect(report, contains('Lumide session: 1h 05m'));
     });
+  });
+
+  group('CommandRunner', () {
+    final posix = Platform.isLinux || Platform.isMacOS
+        ? false
+        : 'needs sleep and ps';
+
+    Future<bool> alive(int pid) async =>
+        (await Process.run('ps', ['-p', '$pid'])).exitCode == 0;
+
+    test('returns stdout and kills commands that time out', () async {
+      final runner = CommandRunner();
+      expect(await runner.run('echo', ['hi']), 'hi\n');
+      expect(await runner.run('false', []), isNull);
+      expect(await runner.run('no-such-command-xyz', []), isNull);
+
+      final watch = Stopwatch()..start();
+      final pending = runner.run('sleep', [
+        '30',
+      ], timeout: const Duration(milliseconds: 300));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      final pid = runner.runningPids.single;
+      expect(await pending, isNull);
+      expect(watch.elapsed, lessThan(const Duration(seconds: 5)));
+      expect(runner.runningPids, isEmpty);
+      expect(await alive(pid), isFalse);
+    }, skip: posix);
+
+    test('dispose kills running commands and refuses new ones', () async {
+      final runner = CommandRunner();
+      final pending = runner.run('sleep', ['30']);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      final pid = runner.runningPids.single;
+      runner.dispose();
+      expect(await pending, isNull);
+      expect(await alive(pid), isFalse);
+      final started = runner.started;
+      expect(await runner.run('echo', ['hi']), isNull);
+      expect(runner.started, started);
+    }, skip: posix);
   });
 
   group('SystemStatsCollector on this machine', () {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'command_runner.dart';
 import 'models/system_stats.dart';
 import 'native/macos.dart';
 import 'native/windows.dart';
@@ -21,6 +22,8 @@ enum Metric { cpu, ram, disk, network, battery, thermal }
 ///
 /// Disk and battery change slowly, so they are re-read at most every
 /// [diskInterval] and [batteryInterval]; other metrics are read on every call.
+///
+/// Call [dispose] when done: it kills commands that are still running.
 class SystemStatsCollector {
   SystemStatsCollector({
     this.diskInterval = const Duration(seconds: 30),
@@ -48,6 +51,17 @@ class SystemStatsCollector {
   ({String path, String description})? _linuxSensor;
 
   Future<SystemStatsSnapshot>? _inFlight;
+
+  final _commands = CommandRunner();
+
+  /// Number of commands started so far, for tests and diagnostics.
+  int get processesStarted => _commands.started;
+
+  /// Kills commands that are still running and stops starting new ones.
+  /// Later [collect] calls return only what can be read without them.
+  void dispose() {
+    _commands.dispose();
+  }
 
   /// Reads [metrics] (all by default). Metrics that aren't requested or
   /// can't be read are `null` in the snapshot.
@@ -117,33 +131,6 @@ class SystemStatsCollector {
 
   // --- Processes -------------------------------------------------------------
 
-  /// Runs [executable] and returns its stdout, or `null` if it fails or takes
-  /// longer than [timeout]. The process is killed on timeout.
-  Future<String?> _run(
-    String executable,
-    List<String> arguments, {
-    Duration timeout = const Duration(seconds: 3),
-  }) async {
-    final Process process;
-    try {
-      process = await Process.start(executable, arguments);
-    } on ProcessException {
-      return null;
-    }
-    final stdoutFuture = process.stdout
-        .transform(const SystemEncoding().decoder)
-        .join();
-    unawaited(process.stderr.drain<void>());
-    try {
-      final exitCode = await process.exitCode.timeout(timeout);
-      final output = await stdoutFuture;
-      return exitCode == 0 ? output : null;
-    } on TimeoutException {
-      process.kill();
-      return null;
-    }
-  }
-
   Future<String?> _readFile(String path) async {
     try {
       return await File(path).readAsString();
@@ -154,7 +141,7 @@ class SystemStatsCollector {
 
   Future<List<TopProcessInfo>> _readProcesses() async {
     if (Platform.isWindows) return const [];
-    final output = await _run('ps', ['-A', '-o', 'pcpu=,rss=,comm=']);
+    final output = await _commands.run('ps', ['-A', '-o', 'pcpu=,rss=,comm=']);
     if (output == null) return const [];
     // Leave out the `ps` process that produced the list.
     return parsePs(output).where((p) => p.name != 'ps').toList();
@@ -217,12 +204,12 @@ class SystemStatsCollector {
     if (Platform.isWindows) return WindowsSystem.instance?.memory();
     if (Platform.isMacOS) {
       final total = _macTotalMemory ??= int.tryParse(
-        (await _run('sysctl', ['-n', 'hw.memsize']))?.trim() ?? '',
+        (await _commands.run('sysctl', ['-n', 'hw.memsize']))?.trim() ?? '',
       );
       if (total == null || total <= 0) return null;
       final results = await Future.wait([
-        _run('vm_stat', const []),
-        _run('sysctl', ['-n', 'vm.swapusage']),
+        _commands.run('vm_stat', const []),
+        _commands.run('sysctl', ['-n', 'vm.swapusage']),
       ]);
       final used = results[0] == null
           ? null
@@ -254,7 +241,7 @@ class SystemStatsCollector {
       final drive = Platform.environment['SystemDrive'] ?? 'C:';
       return WindowsSystem.instance?.disk('$drive\\');
     }
-    final output = await _run('df', ['-kP', '/']);
+    final output = await _commands.run('df', ['-kP', '/']);
     return output == null ? null : parseDf(output);
   }
 
@@ -319,7 +306,12 @@ class SystemStatsCollector {
     if (Platform.isMacOS) {
       final interface = await _macDefaultInterface();
       if (interface == null) return null;
-      final output = await _run('netstat', ['-b', '-n', '-I', interface]);
+      final output = await _commands.run('netstat', [
+        '-b',
+        '-n',
+        '-I',
+        interface,
+      ]);
       final counters = output == null
           ? null
           : parseNetstatInterface(output, interface);
@@ -331,7 +323,7 @@ class SystemStatsCollector {
     }
 
     if (Platform.isWindows) {
-      final output = await _run('netstat', ['-e']);
+      final output = await _commands.run('netstat', ['-e']);
       final counters = output == null ? null : parseWindowsNetstatE(output);
       return counters == null ? null : (counters: counters, interface: null);
     }
@@ -347,7 +339,7 @@ class SystemStatsCollector {
         DateTime.now().difference(time) < const Duration(seconds: 30)) {
       return _macInterface;
     }
-    final output = await _run('route', ['-n', 'get', 'default']);
+    final output = await _commands.run('route', ['-n', 'get', 'default']);
     _macInterface = output == null ? null : parseRouteGetDefault(output);
     _macInterfaceTime = DateTime.now();
     return _macInterface;
@@ -375,7 +367,7 @@ class SystemStatsCollector {
 
   Future<BatteryStats?> _readBattery() async {
     if (Platform.isMacOS) {
-      final output = await _run('pmset', ['-g', 'batt']);
+      final output = await _commands.run('pmset', ['-g', 'batt']);
       return output == null ? null : parsePmsetBatt(output);
     }
     if (Platform.isWindows) return WindowsSystem.instance?.battery();
@@ -478,9 +470,8 @@ class SystemStatsCollector {
             if (raw == null) continue;
             final celsius = parseMilliCelsius(raw);
             if (celsius == null) continue;
-            final label = (await _readFile(
-              '${entity.path}/temp${i}_label',
-            ))?.trim();
+            final label = (await _readFile('${entity.path}/temp${i}_label'))
+                ?.trim();
             candidates.add((
               path: path,
               sensor: LinuxTempSensor(chip, label, celsius),
