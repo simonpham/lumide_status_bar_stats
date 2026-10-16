@@ -1,6 +1,6 @@
 id: lumide_status_bar_stats
 name: 'System Stats'
-version: '1.0.0'
+version: '1.0.1'
 description: 'CPU, memory, disk, network, battery and CPU temperature in the Lumide status bar.'
 entry_point: 'bin/main.dart'
 

@@ -2,7 +2,7 @@ name: lumide_status_bar_stats
 description: >-
   Lumide IDE plugin that shows CPU, memory, disk, network, battery and CPU
   temperature in the status bar, with a live dashboard. Linux, macOS, Windows.
-version: 1.0.0
+version: 1.0.1
 homepage: https://github.com/simonpham/lumide_status_bar_stats
 repository: https://github.com/simonpham/lumide_status_bar_stats
 issue_tracker: https://github.com/simonpham/lumide_status_bar_stats/issues
